@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "datatypes",
+    "client",
+    "pool"
+]
