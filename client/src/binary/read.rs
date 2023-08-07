@@ -25,7 +25,6 @@ where
                 if i == MAX_VARINT_LEN64 || i == (MAX_VARINT_LEN64 - 1) && b > 1 {
                     return Err(ClickHouseClientError::UVarintOverFlow.into());
                 }
-                self.advance(MAX_VARINT_LEN64 - i - 1);
                 return Ok(x | (u64::from(b) << s));
             }
 
@@ -56,6 +55,7 @@ where
 mod test {
     use crate::binary::read::Read;
     use crate::binary::write::Write;
+    use crate::binary::MAX_VARINT_LEN64;
 
     #[test]
     fn test_read_uvarint() {
@@ -69,6 +69,20 @@ mod test {
             let actual = buffer.read_uvarint();
 
             assert_eq!(actual.unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_write_then_read_uvarint() {
+        const MAX: usize = 10000;
+        let mut buf = bytes::BytesMut::with_capacity(MAX);
+        for expected in 0..(MAX / MAX_VARINT_LEN64) {
+            let _ = buf.write_uvarint(expected as u64);
+        }
+        let mut buffer = buf.freeze();
+        for expected in 0..(MAX / MAX_VARINT_LEN64) {
+            let actual = buffer.read_uvarint();
+            assert_eq!(actual.unwrap(), expected as u64);
         }
     }
 
