@@ -1,3 +1,5 @@
+use bytes::BufMut;
+
 use crate::binary::write::Write;
 
 pub trait ClientPacket {
@@ -62,6 +64,7 @@ impl ClientPacket for HelloPacket {
 
     fn build(&self) -> Box<dyn bytes::Buf> {
         let mut buf = bytes::BytesMut::new();
+        buf.put_u8(ClientPackets::Hello as u8);
         buf.write_string(&self.client_name);
         buf.write_uvarint(self.version_major);
         buf.write_uvarint(self.version_minor);
