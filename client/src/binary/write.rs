@@ -1,3 +1,5 @@
+use crate::binary::MAX_VARINT_LEN64;
+
 pub(crate) trait Write {
     fn write_uvarint(&mut self, x: u64) -> usize;
     fn write_string(&mut self, x: &str) -> usize;
@@ -9,7 +11,7 @@ where
     T: bytes::BufMut,
 {
     fn write_uvarint(&mut self, x: u64) -> usize {
-        let mut i = 0;
+        let mut i = 1;
         let mut mx = x;
         while mx >= 0x80 {
             self.put_u8(mx as u8 | 0x80);
@@ -17,7 +19,8 @@ where
             i += 1;
         }
         self.put_u8(mx as u8);
-        i + 1
+        self.put_bytes(0x00_u8, MAX_VARINT_LEN64 - i);
+        i
     }
 
     fn write_string(&mut self, x: &str) -> usize {
@@ -48,7 +51,10 @@ mod test {
         let length = buf.write_uvarint(1);
 
         assert_eq!(length, 1);
-        assert_eq!(buf, vec![0x01]);
+        assert_eq!(
+            buf,
+            vec![0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        );
     }
 
     #[test]
@@ -58,7 +64,10 @@ mod test {
         let length = buf.write_uvarint(2);
 
         assert_eq!(length, 1);
-        assert_eq!(buf, vec![0x02]);
+        assert_eq!(
+            buf,
+            vec![0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        );
     }
 
     #[test]
@@ -68,7 +77,10 @@ mod test {
         let length = buf.write_uvarint(127);
 
         assert_eq!(length, 1);
-        assert_eq!(buf, vec![0x7f]);
+        assert_eq!(
+            buf,
+            vec![0x7f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        );
     }
 
     #[test]
@@ -78,7 +90,10 @@ mod test {
         let length = buf.write_uvarint(128);
 
         assert_eq!(length, 2);
-        assert_eq!(buf, vec![0x80, 0x01]);
+        assert_eq!(
+            buf,
+            vec![0x80, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        );
     }
 
     #[test]
@@ -88,7 +103,10 @@ mod test {
         let length = buf.write_uvarint(255);
 
         assert_eq!(length, 2);
-        assert_eq!(buf, vec![0xff, 0x01]);
+        assert_eq!(
+            buf,
+            vec![0xff, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        );
     }
 
     #[test]
@@ -98,7 +116,23 @@ mod test {
         let length = buf.write_uvarint(256);
 
         assert_eq!(length, 2);
-        assert_eq!(buf, vec![0x80, 0x02]);
+        assert_eq!(
+            buf,
+            vec![0x80, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        );
+    }
+
+    #[test]
+    fn test_write_uvarint_100500() {
+        let mut buf = bytes::BytesMut::with_capacity(10);
+
+        let length = buf.write_uvarint(100500);
+
+        assert_eq!(length, 3);
+        assert_eq!(
+            buf,
+            vec![0x94, 0x91, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        );
     }
 
     #[test]
@@ -108,7 +142,12 @@ mod test {
         let length = buf.write_string("Hi");
 
         assert_eq!(length, 3);
-        assert_eq!(buf, vec![0x02, 0x48, 0x69]);
+        assert_eq!(
+            buf,
+            vec![
+                0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x48, 0x69
+            ]
+        );
     }
 
     #[test]

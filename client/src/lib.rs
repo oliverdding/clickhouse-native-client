@@ -1,3 +1,3 @@
-mod binary;
-mod error;
-mod protocol;
+pub mod binary;
+pub mod error;
+pub mod protocol;

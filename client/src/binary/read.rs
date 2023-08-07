@@ -2,6 +2,8 @@ use miette::{IntoDiagnostic, Result};
 
 use crate::error::ClickHouseClientError;
 
+use crate::binary::MAX_VARINT_LEN64;
+
 pub(crate) trait Read {
     fn read_uvarint(&mut self) -> Result<u64>;
     fn read_string(&mut self) -> Result<String>;
@@ -20,9 +22,10 @@ where
             let b: u8 = self.get_u8();
 
             if b < 0x80 {
-                if i > 9 || i == 9 && b > 1 {
+                if i == MAX_VARINT_LEN64 || i == (MAX_VARINT_LEN64 - 1) && b > 1 {
                     return Err(ClickHouseClientError::UVarintOverFlow.into());
                 }
+                self.advance(MAX_VARINT_LEN64 - i - 1);
                 return Ok(x | (u64::from(b) << s));
             }
 
@@ -57,7 +60,7 @@ mod test {
     #[test]
     fn test_read_uvarint() {
         let mut buf = bytes::BytesMut::with_capacity(10);
-        for expected in 0..512 {
+        for expected in 0..10240 {
             let _ = buf.write_uvarint(expected);
 
             let mut buffer = buf.clone().freeze();
