@@ -4,3 +4,5 @@ members = [
     "client",
     "pool"
 ]
+
+workspace.resolver = "2"

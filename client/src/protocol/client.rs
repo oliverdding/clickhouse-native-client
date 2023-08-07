@@ -8,11 +8,11 @@ pub enum ClientPackets {
 }
 
 pub struct HelloPacket {
-    pub client_name: &str,
+    pub client_name: String,
     pub version_major: u64,
     pub version_minor: u64,
     pub protocol_version: u64,
-    pub database: &str,
-    pub username: &str,
-    pub password: &str,
+    pub database: String,
+    pub username: String,
+    pub password: String,
 }

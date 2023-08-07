@@ -17,12 +17,11 @@ pub enum ServerPackets {
 }
 
 pub struct HelloPacket {
-    pub name: &str,
+    pub name: String,
     pub version_major: u64,
     pub version_minor: u64,
     pub revision: u64,
-    pub revision: u64,
-    pub tz: &str,
-    pub display_name: &str,
-    pub version_patch: &str,
+    pub tz: String,
+    pub display_name: String,
+    pub version_patch: String,
 }
