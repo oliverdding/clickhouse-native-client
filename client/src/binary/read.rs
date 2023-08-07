@@ -48,3 +48,56 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::binary::read::Read;
+    use crate::binary::write::Write;
+
+    #[test]
+    fn test_read_uvarint() {
+        let mut buf = bytes::BytesMut::with_capacity(10);
+        for expected in 0..512 {
+            let _ = buf.write_uvarint(expected);
+
+            let mut buffer = buf.clone().freeze();
+            buf.clear();
+
+            let actual = buffer.read_uvarint();
+
+            assert_eq!(actual.unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_read_string() {
+        let mut buf = bytes::BytesMut::with_capacity(1024);
+
+        for expected in vec!["hello world", "rust!", "你好", "❤️‍🔥"] {
+            let _ = buf.write_string(expected);
+
+            let mut buffer = buf.clone().freeze();
+            buf.clear();
+
+            let actual = buffer.read_string();
+
+            assert_eq!(actual.unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_read_bool() {
+        let mut buf = bytes::BytesMut::with_capacity(1024);
+
+        for expected in vec![true, false] {
+            let _ = buf.write_bool(expected);
+
+            let mut buffer = buf.clone().freeze();
+            buf.clear();
+
+            let actual = buffer.read_bool();
+
+            assert_eq!(actual.unwrap(), expected);
+        }
+    }
+}
