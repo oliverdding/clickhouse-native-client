@@ -7,8 +7,7 @@ pub trait ServerPacket {
         Self: Sized;
 }
 
-#[derive(PartialEq, Eq)]
-pub enum ServerPackets {
+pub enum ServerPacketCode {
     Hello = 0,
     Data = 1,
     Exception = 2,

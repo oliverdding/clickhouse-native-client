@@ -7,7 +7,7 @@ pub trait ClientPacket {
     fn build(&self) -> Box<dyn bytes::Buf>;
 }
 
-pub enum ClientPackets {
+pub enum ClientPacketCode {
     Hello = 0,
     Query = 1,
     Data = 2,
@@ -36,16 +36,19 @@ const CLICKHOUSE_USERNAME: &str = "default";
 const CLICKHOUSE_PASSWORD: &str = "";
 
 impl HelloPacket {
-    pub fn database(&mut self, database: &str) {
+    pub fn database(mut self, database: &str) -> HelloPacket {
         self.database = database.to_owned();
+        self
     }
 
-    pub fn username(&mut self, username: &str) {
+    pub fn username(mut self, username: &str) -> HelloPacket {
         self.username = username.to_owned();
+        self
     }
 
-    pub fn password(&mut self, password: &str) {
+    pub fn password(mut self, password: &str) -> HelloPacket {
         self.password = password.to_owned();
+        self
     }
 }
 
