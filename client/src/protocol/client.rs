@@ -1,8 +1,7 @@
-use crate::binary::write::Write;
+use crate::{binary::encode::ClickHouseBufMut, error::ClickHouseClientError};
 
 pub trait ClientPacket {
-    fn new() -> Self;
-    fn build(&self) -> Box<dyn bytes::Buf>;
+    fn encode(&self, buf: &mut dyn bytes::BufMut) -> Result<usize, ClickHouseClientError>;
 }
 
 #[derive(Copy, Clone)]
@@ -15,9 +14,10 @@ pub enum ClientPacketCode {
     TableStatus = 5,
 }
 
-impl ClientPacketCode {
-    pub fn encode(&self, buf: &mut dyn bytes::BufMut) {
+impl ClientPacket for ClientPacketCode {
+    fn encode(&self, buf: &mut dyn bytes::BufMut) -> Result<usize, ClickHouseClientError> {
         buf.put_u8(*self as u8);
+        Ok(1)
     }
 }
 
@@ -41,6 +41,18 @@ const CLICKHOUSE_USERNAME: &str = "default";
 const CLICKHOUSE_PASSWORD: &str = "";
 
 impl HelloPacket {
+    pub fn default() -> Self {
+        Self {
+            client_name: CLICKHOUSE_CLIENT_NAME.to_owned(),
+            version_major: CLICKHOUSE_VERSION_MAJOR,
+            version_minor: CLICKHOUSE_VERSION_MINOR,
+            protocol_version: CLICKHOUSE_PROTOCOL_VERSION,
+            database: CLICKHOUSE_DATABASE.to_owned(),
+            username: CLICKHOUSE_USERNAME.to_owned(),
+            password: CLICKHOUSE_PASSWORD.to_owned(),
+        }
+    }
+
     pub fn database(mut self, database: &str) -> HelloPacket {
         self.database = database.to_owned();
         self
@@ -58,40 +70,35 @@ impl HelloPacket {
 }
 
 impl ClientPacket for HelloPacket {
-    fn new() -> Self {
-        Self {
-            client_name: CLICKHOUSE_CLIENT_NAME.to_owned(),
-            version_major: CLICKHOUSE_VERSION_MAJOR,
-            version_minor: CLICKHOUSE_VERSION_MINOR,
-            protocol_version: CLICKHOUSE_PROTOCOL_VERSION,
-            database: CLICKHOUSE_DATABASE.to_owned(),
-            username: CLICKHOUSE_USERNAME.to_owned(),
-            password: CLICKHOUSE_PASSWORD.to_owned(),
-        }
-    }
-
-    fn build(&self) -> Box<dyn bytes::Buf> {
-        let mut buf = bytes::BytesMut::new();
-        ClientPacketCode::Hello.encode(&mut buf);
-        buf.write_string(&self.client_name);
-        buf.write_uvarint(self.version_major);
-        buf.write_uvarint(self.version_minor);
-        buf.write_uvarint(self.protocol_version);
-        buf.write_string(&self.database);
-        buf.write_string(&self.username);
-        buf.write_string(&self.password);
-        Box::new(buf.freeze()) // FIXME: temporary value borrowed
+    fn encode(&self, mut buf: &mut dyn bytes::BufMut) -> Result<usize, ClickHouseClientError> {
+        let mut len: usize = 0;
+        len += ClientPacketCode::Hello.encode(buf).unwrap();
+        len += buf.put_string(&self.client_name);
+        len += buf.put_uvarint(self.version_major);
+        len += buf.put_uvarint(self.version_minor);
+        len += buf.put_uvarint(self.protocol_version);
+        len += buf.put_string(&self.database);
+        len += buf.put_string(&self.username);
+        len += buf.put_string(&self.password);
+        Ok(len)
     }
 }
 
 #[cfg(test)]
 mod test {
     use crate::protocol::client::{self, ClientPacket};
+    use bytes::Buf;
+    use tracing::info;
+    use tracing_test::traced_test;
 
+    #[traced_test]
     #[test]
     fn test_client_hello() {
-        let hello_packet = client::HelloPacket::new().build();
+        let mut buf = bytes::BytesMut::new();
 
-        println!("{:?}", hello_packet.chunk());
+        let len = client::HelloPacket::default().encode(&mut buf);
+
+        info!("written hello packet size is: {}", len.unwrap());
+        info!("written hello packet is:\n{:?}", buf.freeze().chunk());
     }
 }

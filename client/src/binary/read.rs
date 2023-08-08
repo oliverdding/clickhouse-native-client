@@ -54,14 +54,14 @@ where
 #[cfg(test)]
 mod test {
     use crate::binary::read::Read;
-    use crate::binary::write::Write;
+    use crate::binary::encode::ClickHouseBufMut;
     use crate::binary::MAX_VARINT_LEN64;
 
     #[test]
     fn test_read_uvarint() {
         let mut buf = bytes::BytesMut::with_capacity(10);
         for expected in 0..10240 {
-            let _ = buf.write_uvarint(expected);
+            let _ = buf.put_uvarint(expected);
 
             let mut buffer = buf.clone().freeze();
             buf.clear();
@@ -77,7 +77,7 @@ mod test {
         const MAX: usize = 10000;
         let mut buf = bytes::BytesMut::with_capacity(MAX);
         for expected in 0..(MAX / MAX_VARINT_LEN64) {
-            let _ = buf.write_uvarint(expected as u64);
+            let _ = buf.put_uvarint(expected as u64);
         }
         let mut buffer = buf.freeze();
         for expected in 0..(MAX / MAX_VARINT_LEN64) {
@@ -91,7 +91,7 @@ mod test {
         let mut buf = bytes::BytesMut::with_capacity(1024);
 
         for expected in vec!["hello world", "rust!", "你好", "❤️‍🔥"] {
-            let _ = buf.write_string(expected);
+            let _ = buf.put_string(expected);
 
             let mut buffer = buf.clone().freeze();
             buf.clear();
@@ -107,7 +107,7 @@ mod test {
         let mut buf = bytes::BytesMut::with_capacity(1024);
 
         for expected in vec![true, false] {
-            let _ = buf.write_bool(expected);
+            let _ = buf.put_bool(expected);
 
             let mut buffer = buf.clone().freeze();
             buf.clear();

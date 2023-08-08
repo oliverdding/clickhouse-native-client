@@ -1,13 +1,9 @@
-use thiserror::Error;
 use miette::Diagnostic;
+use thiserror::Error;
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum ClickHouseClientError {
-    #[error(transparent)]
-    #[diagnostic(code(my_lib::io_error))]
-    IoError(#[from] std::io::Error),
-
     #[error("overflow when reading uvarint")]
-    #[diagnostic(code(clickhouse_client::binary::read))]
+    #[diagnostic(code(clickhouse_client::binary::read), url(docsrs))]
     UVarintOverFlow,
 }

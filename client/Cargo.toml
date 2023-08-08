@@ -10,4 +10,10 @@ tokio = { version = "^1.5", features = ["full"] }
 miette = "5.10.0"
 thiserror = "1.0.44"
 bytes = "1.4.0"
+tracing = "0.1.37"
 clickhouse-rs-cityhash-sys = "0.1.2"
+
+[dev-dependencies]
+miette = { version = "5.10.0", features = ["fancy"] }
+tracing-subscriber = "0.3.17"
+tracing-test = "0.2.4"
