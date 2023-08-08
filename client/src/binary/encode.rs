@@ -1,10 +1,10 @@
-pub trait ClickHouseBufMut {
+pub trait BatchBufMut {
     fn put_uvarint(&mut self, x: u64) -> usize;
     fn put_string(&mut self, x: &str) -> usize;
     fn put_bool(&mut self, x: bool) -> usize;
 }
 
-impl<T> ClickHouseBufMut for T
+impl<T> BatchBufMut for T
 where
     T: bytes::BufMut,
 {
@@ -39,7 +39,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::binary::encode::ClickHouseBufMut;
+    use crate::binary::encode::BatchBufMut;
 
     #[test]
     fn test_write_uvarint_1() {

@@ -1,4 +1,4 @@
-pub mod read;
+pub mod decode;
 pub mod encode;
 
 // see also: https://pkg.go.dev/encoding/binary#pkg-constants

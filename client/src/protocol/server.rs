@@ -1,4 +1,4 @@
-use crate::binary::read::Read;
+use crate::binary::decode::ClickHouseDecode;
 use miette::Result;
 
 pub trait ServerPacket {

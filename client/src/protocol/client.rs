@@ -1,4 +1,4 @@
-use crate::{binary::encode::ClickHouseBufMut, error::ClickHouseClientError};
+use crate::{binary::encode::BatchBufMut, error::ClickHouseClientError};
 
 pub trait ClientPacket {
     fn encode(&self, buf: &mut dyn bytes::BufMut) -> Result<usize, ClickHouseClientError>;
