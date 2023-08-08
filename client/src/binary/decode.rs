@@ -116,21 +116,21 @@ mod test {
     use bytes::Buf;
 
     use crate::binary::decode::ClickHouseDecoder;
-    use crate::binary::encode::BatchBufMut;
+    use crate::binary::encode::ClickHouseEncoder;
     use crate::binary::MAX_VARINT_LEN64;
 
     use miette::Result;
 
     #[tokio::test]
     async fn test_decode_uvarint() -> Result<()> {
-        let mut buf = bytes::BytesMut::with_capacity(10);
+        let mut buf = Vec::with_capacity(10);
         for expected in 0..10240 {
-            let _ = buf.put_uvarint(expected);
+            let encoder = ClickHouseEncoder::new(buf);
+            encoder.encode_uvarint(expected).await?;
+            encoder.flush().await?;
+            encoder.shutdown().await?;
 
-            let buffer = buf.clone().freeze();
-            buf.clear();
-
-            let mut decoder = ClickHouseDecoder::new(buffer.chunk());
+            let mut decoder = ClickHouseDecoder::new(buf.as_slice());
             let actual = decoder.decode_uvarint().await?;
 
             assert_eq!(actual, expected);
@@ -139,15 +139,17 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_write_then_read_uvarint() -> Result<()> {
+    async fn test_decode_continus_uvarint() -> Result<()> {
         const MAX: usize = 10000;
-        let mut buf = bytes::BytesMut::with_capacity(MAX);
+        let mut buf = Vec::with_capacity(10);
+        let encoder = ClickHouseEncoder::new(buf);
         for expected in 0..(MAX / MAX_VARINT_LEN64) {
-            let _ = buf.put_uvarint(expected as u64);
+            encoder.encode_uvarint(expected as u64).await?;
         }
-        let buffer = buf.freeze();
-        let mut decoder = ClickHouseDecoder::new(buffer.chunk());
+        encoder.flush().await?;
+        encoder.shutdown().await?;
 
+        let mut decoder = ClickHouseDecoder::new(buf.as_slice());
         for expected in 0..(MAX / MAX_VARINT_LEN64) {
             let actual = decoder.decode_uvarint().await?;
             assert_eq!(actual, expected as u64);
@@ -157,15 +159,15 @@ mod test {
 
     #[tokio::test]
     async fn test_read_string() -> Result<()> {
-        let mut buf = bytes::BytesMut::with_capacity(1024);
+        let mut buf = Vec::with_capacity(1024);
 
         for expected in vec!["hello world", "rust!", "你好", "❤️‍🔥"] {
-            let _ = buf.put_string(expected);
+            let encoder = ClickHouseEncoder::new(buf);
+            encoder.encode_string(expected).await?;
+            encoder.flush().await?;
+            encoder.shutdown().await?;
 
-            let buffer = buf.clone().freeze();
-            buf.clear();
-
-            let mut decoder = ClickHouseDecoder::new(buffer.chunk());
+            let mut decoder = ClickHouseDecoder::new(buf.as_slice());
             let actual = decoder.decode_string().await?;
 
             assert_eq!(actual, expected);
@@ -175,15 +177,15 @@ mod test {
 
     #[tokio::test]
     async fn test_read_bool() -> Result<()> {
-        let mut buf = bytes::BytesMut::with_capacity(1024);
+        let mut buf = Vec::with_capacity(1);
 
         for expected in vec![true, false] {
-            let _ = buf.put_bool(expected);
+            let encoder = ClickHouseEncoder::new(buf);
+            encoder.encode_bool(expected).await?;
+            encoder.flush().await?;
+            encoder.shutdown().await?;
 
-            let buffer = buf.clone().freeze();
-            buf.clear();
-
-            let mut decoder = ClickHouseDecoder::new(buffer.chunk());
+            let mut decoder = ClickHouseDecoder::new(buf.as_slice());
             let actual = decoder.decode_bool().await?;
 
             assert_eq!(actual, expected);

@@ -1,8 +1,6 @@
-use crate::{binary::encode::BatchBufMut, error::ClickHouseClientError};
+use tokio::io::AsyncWrite;
 
-pub trait ClientPacket {
-    fn encode(&self, buf: &mut dyn bytes::BufMut) -> Result<usize, ClickHouseClientError>;
-}
+use crate::{binary::encode::ClickHouseEncoder, error::ClickHouseClientError};
 
 #[derive(Copy, Clone)]
 pub enum ClientPacketCode {
@@ -14,9 +12,15 @@ pub enum ClientPacketCode {
     TableStatus = 5,
 }
 
-impl ClientPacket for ClientPacketCode {
-    fn encode(&self, buf: &mut dyn bytes::BufMut) -> Result<usize, ClickHouseClientError> {
-        buf.put_u8(*self as u8);
+impl ClientPacketCode {
+    pub async fn encode<R>(
+        &self,
+        encoder: &mut ClickHouseEncoder<R>,
+    ) -> Result<usize, ClickHouseClientError>
+    where
+        R: AsyncWrite,
+    {
+        encoder.encode_u8(*self as u8).await?;
         Ok(1)
     }
 }
@@ -69,36 +73,48 @@ impl HelloPacket {
     }
 }
 
-impl ClientPacket for HelloPacket {
-    fn encode(&self, mut buf: &mut dyn bytes::BufMut) -> Result<usize, ClickHouseClientError> {
+impl HelloPacket {
+    pub async fn encode<R>(
+        &self,
+        encoder: &mut ClickHouseEncoder<R>,
+    ) -> Result<usize, ClickHouseClientError>
+    where
+        R: AsyncWrite,
+    {
         let mut len: usize = 0;
-        len += ClientPacketCode::Hello.encode(buf).unwrap();
-        len += buf.put_string(&self.client_name);
-        len += buf.put_uvarint(self.version_major);
-        len += buf.put_uvarint(self.version_minor);
-        len += buf.put_uvarint(self.protocol_version);
-        len += buf.put_string(&self.database);
-        len += buf.put_string(&self.username);
-        len += buf.put_string(&self.password);
+        len += ClientPacketCode::Hello.encode(encoder).await?;
+        len += encoder.encode_string(&self.client_name).await?;
+        len += encoder.encode_uvarint(self.version_major).await?;
+        len += encoder.encode_uvarint(self.version_minor).await?;
+        len += encoder.encode_uvarint(self.protocol_version).await?;
+        len += encoder.encode_string(&self.database).await?;
+        len += encoder.encode_string(&self.username).await?;
+        len += encoder.encode_string(&self.password).await?;
+
+        encoder.flush().await?;
+
         Ok(len)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::protocol::client::{self, ClientPacket};
-    use bytes::Buf;
+    use crate::{binary::encode::ClickHouseEncoder, protocol::client};
+    use miette::Result;
+    use tokio::io::AsyncBufReadExt;
     use tracing::info;
     use tracing_test::traced_test;
 
     #[traced_test]
-    #[test]
-    fn test_client_hello() {
-        let mut buf = bytes::BytesMut::new();
+    #[tokio::test]
+    async fn test_client_hello() -> Result<()> {
+        let buf = Vec::new();
+        let mut encoder = ClickHouseEncoder::new(buf);
 
-        let len = client::HelloPacket::default().encode(&mut buf);
+        let len = client::HelloPacket::default().encode(&mut encoder).await?;
 
-        info!("written hello packet size is: {}", len.unwrap());
-        info!("written hello packet is:\n{:?}", buf.freeze().chunk());
+        info!("written hello packet size is: {}", len);
+        info!("written hello packet is:\n{:?}", buf);
+        Ok(())
     }
 }
