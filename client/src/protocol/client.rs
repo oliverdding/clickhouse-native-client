@@ -1,5 +1,3 @@
-use bytes::BufMut;
-
 use crate::binary::write::Write;
 
 pub trait ClientPacket {
@@ -7,6 +5,7 @@ pub trait ClientPacket {
     fn build(&self) -> Box<dyn bytes::Buf>;
 }
 
+#[derive(Copy, Clone)]
 pub enum ClientPacketCode {
     Hello = 0,
     Query = 1,
@@ -14,6 +13,12 @@ pub enum ClientPacketCode {
     Cancel = 3,
     Ping = 4,
     TableStatus = 5,
+}
+
+impl ClientPacketCode {
+    pub fn encode(&self, buf: &mut dyn bytes::BufMut) {
+        buf.put_u8(*self as u8);
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -67,7 +72,7 @@ impl ClientPacket for HelloPacket {
 
     fn build(&self) -> Box<dyn bytes::Buf> {
         let mut buf = bytes::BytesMut::new();
-        buf.put_u8(ClientPackets::Hello as u8);
+        ClientPacketCode::Hello.encode(&mut buf);
         buf.write_string(&self.client_name);
         buf.write_uvarint(self.version_major);
         buf.write_uvarint(self.version_minor);

@@ -4,7 +4,7 @@ use crate::error::ClickHouseClientError;
 
 use crate::binary::MAX_VARINT_LEN64;
 
-pub(crate) trait Read {
+pub trait Read {
     fn read_uvarint(&mut self) -> Result<u64>;
     fn read_string(&mut self) -> Result<String>;
     fn read_bool(&mut self) -> Result<bool>;

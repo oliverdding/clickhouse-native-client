@@ -7,6 +7,7 @@ pub trait ServerPacket {
         Self: Sized;
 }
 
+#[derive(Copy, Clone)]
 pub enum ServerPacketCode {
     Hello = 0,
     Data = 1,
