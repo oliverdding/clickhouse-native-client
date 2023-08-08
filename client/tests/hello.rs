@@ -1,7 +1,6 @@
 use core::panic;
 
 use bytes::Buf;
-use clickhouse_client::binary::decode::ClickHouseDecode;
 use clickhouse_client::protocol::{
     client::{self, ClientPacket, ClientPacketCode},
     server::{self, ServerPacket, ServerPacketCode},
