@@ -1,6 +1,5 @@
 use core::panic;
 
-use bytes::Buf;
 use clickhouse_client::{
     binary::decode::ClickHouseDecoder,
     protocol::{
@@ -8,10 +7,8 @@ use clickhouse_client::{
         server::{self, ServerPacketCode},
     },
 };
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpStream,
-};
+
+use tokio::{net::TcpStream, io::AsyncWriteExt};
 use tracing::info;
 use tracing_test::traced_test;
 
@@ -36,7 +33,7 @@ async fn test_client_hello() -> Result<()> {
     info!("result code is: {}", result_code);
 
     assert_eq!(result_code, ServerPacketCode::Hello as u64);
-    let result_packet = server::HelloPacket::decode(decoder).await?;
+    let result_packet = server::HelloPacket::decode(&mut decoder).await?;
     info!("{:?}", result_packet);
 
     stream.shutdown().await.unwrap();

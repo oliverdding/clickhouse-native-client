@@ -21,6 +21,8 @@ pub enum ServerPacketCode {
     ProfileEvents = 14,
 }
 
+// TODO: use async-trait for better consistency
+
 #[derive(Debug, Clone)]
 pub struct HelloPacket {
     pub name: String,
@@ -33,7 +35,9 @@ pub struct HelloPacket {
 }
 
 impl HelloPacket {
-    pub async fn decode<R>(mut decoder: ClickHouseDecoder<R>) -> Result<Self, ClickHouseClientError>
+    pub async fn decode<R>(
+        decoder: &mut ClickHouseDecoder<R>,
+    ) -> Result<Self, ClickHouseClientError>
     where
         R: AsyncRead,
         Self: Sized,
@@ -66,25 +70,42 @@ pub struct ExceptionPacket {
     pub nested: bool,
 }
 
-// impl ExceptionPacket {
-//     pub async fn decode<R>(mut decoder: ClickHouseDecoder<R>) -> Result<Self, ClickHouseClientError>
-//     where
-//         R: AsyncRead,
-//         Self: Sized,
-//     {
-//         let name = decoder.decode_string().await?;
-//         let version_major = decoder.decode_uvarint().await?;
-//         let version_minor = decoder.decode_uvarint().await?;
-//         let revision = decoder.decode_uvarint().await?;
-//         let tz = decoder.decode_string().await?;
-//         let display_name = decoder.decode_string().await?;
-//         let version_patch = decoder.decode_string().await?;
-//         Ok(Self {
-//             code,
-//             name: name.to_owned(),
-//             message: message.to_owned(),
-//             stack_trace: stack_trace.to_owned(),
-//             nested: nested,
-//         })
-//     }
-// }
+impl ExceptionPacket {
+    pub async fn decode<R>(
+        decoder: &mut ClickHouseDecoder<R>,
+    ) -> Result<Self, ClickHouseClientError>
+    where
+        R: AsyncRead,
+        Self: Sized,
+    {
+        let code = decoder.decode_i32().await?;
+        let name = decoder.decode_string().await?;
+        let message = decoder.decode_string().await?;
+        let stack_trace = decoder.decode_string().await?;
+        let nested = decoder.decode_bool().await?;
+        Ok(Self {
+            code,
+            name: name.to_owned(),
+            message: message.to_owned(),
+            stack_trace: stack_trace.to_owned(),
+            nested: nested,
+        })
+    }
+
+    pub async fn decode_all<R>(
+        decoder: &mut ClickHouseDecoder<R>,
+    ) -> Result<Vec<Self>, ClickHouseClientError>
+    where
+        R: AsyncRead,
+        Self: Sized,
+    {
+        let mut exception_list = Vec::new();
+        let mut has_next = true;
+        while has_next {
+            let exception = ExceptionPacket::decode(decoder).await?;
+            has_next = exception.nested;
+            exception_list.push(exception);
+        }
+        Ok(exception_list)
+    }
+}

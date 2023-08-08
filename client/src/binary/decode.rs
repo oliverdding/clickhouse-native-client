@@ -38,13 +38,21 @@ where
                         }
                     },
                     Err(_) => {
-                        return Err(ClickHouseClientError::ReadTimeout.into());
+                        return Err(ClickHouseClientError::ReadTimeout);
                     }
                 }
             } else {
                 return Ok(());
             }
         }
+    }
+
+    pub async fn decode_i32(&mut self) -> Result<i32, ClickHouseClientError> {
+        self.guarantee_size(4).await?;
+        self.reader
+            .read_i32_le()
+            .await
+            .map_err(|e| ClickHouseClientError::IoError(e))
     }
 
     pub async fn decode_uvarint(&mut self) -> Result<u64, ClickHouseClientError> {
@@ -56,12 +64,12 @@ where
             let future = self.reader.read_u8();
             let b: u8 = match tokio::time::timeout(Duration::from_millis(100), future).await {
                 Ok(value) => value.map_err(|e| ClickHouseClientError::IoError(e))?,
-                Err(_) => return Err(ClickHouseClientError::ReadTimeout.into()),
+                Err(_) => return Err(ClickHouseClientError::ReadTimeout),
             };
 
             if b < 0x80 {
                 if i == MAX_VARINT_LEN64 || i == (MAX_VARINT_LEN64 - 1) && b > 1 {
-                    return Err(ClickHouseClientError::UVarintOverFlow.into());
+                    return Err(ClickHouseClientError::UVarintOverFlow);
                 }
                 return Ok(x | (u64::from(b) << s));
             }
@@ -90,11 +98,16 @@ where
 
     pub async fn decode_bool(&mut self) -> Result<bool, ClickHouseClientError> {
         self.guarantee_size(1).await?;
-        let buffer = self.reader.buffer();
-
-        let result = buffer[0] != 0_u8;
-        self.reader.consume(1);
-        Ok(result)
+        match self
+            .reader
+            .read_u8()
+            .await
+            .map_err(|e| ClickHouseClientError::IoError(e))?
+        {
+            0 => Ok(false),
+            1 => Ok(true),
+            _ => Err(ClickHouseClientError::UnknownByte),
+        }
     }
 }
 
