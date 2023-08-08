@@ -1,10 +1,6 @@
-use miette::Result;
+use tokio::io::AsyncRead;
 
-pub trait ServerPacket {
-    fn new(buf: Box<dyn bytes::Buf>) -> Result<Self>
-    where
-        Self: Sized;
-}
+use crate::{binary::decode::ClickHouseDecoder, error::ClickHouseClientError};
 
 #[derive(Copy, Clone)]
 pub enum ServerPacketCode {
@@ -33,52 +29,56 @@ pub struct HelloPacket {
     pub revision: u64,
     pub tz: String,
     pub display_name: String,
-    pub version_patch: String,
+    pub version_patch: u64,
 }
 
-// impl ServerPacket for HelloPacket {
-//     fn new(mut buf: Box<dyn bytes::Buf>) -> Result<Self>
+impl HelloPacket {
+    pub async fn decode<R>(mut decoder: ClickHouseDecoder<R>) -> Result<Self, ClickHouseClientError>
+    where
+        R: AsyncRead,
+        Self: Sized,
+    {
+        let name = decoder.decode_string().await?;
+        let version_major = decoder.decode_uvarint().await?;
+        let version_minor = decoder.decode_uvarint().await?;
+        let revision = decoder.decode_uvarint().await?;
+        let tz = decoder.decode_string().await?;
+        let display_name = decoder.decode_string().await?;
+        let version_patch = decoder.decode_uvarint().await?;
+        Ok(Self {
+            name,
+            version_major,
+            version_minor,
+            revision,
+            tz,
+            display_name,
+            version_patch,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ExceptionPacket {
+    pub code: i32,
+    pub name: String,
+    pub message: String,
+    pub stack_trace: String,
+    pub nested: bool,
+}
+
+// impl ExceptionPacket {
+//     pub async fn decode<R>(mut decoder: ClickHouseDecoder<R>) -> Result<Self, ClickHouseClientError>
 //     where
+//         R: AsyncRead,
 //         Self: Sized,
 //     {
-//         let name = buf.read_string()?;
-//         let version_major = buf.read_uvarint()?;
-//         let version_minor = buf.read_uvarint()?;
-//         let revision = buf.read_uvarint()?;
-//         let tz = buf.read_string()?;
-//         let display_name = buf.read_string()?;
-//         let version_patch = buf.read_string()?;
-//         Ok(Self {
-//             name,
-//             version_major,
-//             version_minor,
-//             revision,
-//             tz,
-//             display_name,
-//             version_patch,
-//         })
-//     }
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct ExceptionPacket {
-//     pub code: i32,
-//     pub name: String,
-//     pub message: String,
-//     pub stack_trace: String,
-//     pub nested: bool,
-// }
-
-// impl ServerPacket for ExceptionPacket {
-//     fn new(mut buf: Box<dyn bytes::Buf>) -> Result<Self>
-//     where
-//         Self: Sized,
-//     {
-//         let code = buf.get_i32_le();
-//         let name = buf.read_string()?;
-//         let message = buf.read_string()?;
-//         let stack_trace = buf.read_string()?;
-//         let nested = buf.read_bool()?;
+//         let name = decoder.decode_string().await?;
+//         let version_major = decoder.decode_uvarint().await?;
+//         let version_minor = decoder.decode_uvarint().await?;
+//         let revision = decoder.decode_uvarint().await?;
+//         let tz = decoder.decode_string().await?;
+//         let display_name = decoder.decode_string().await?;
+//         let version_patch = decoder.decode_string().await?;
 //         Ok(Self {
 //             code,
 //             name: name.to_owned(),

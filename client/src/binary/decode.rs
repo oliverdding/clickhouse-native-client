@@ -24,8 +24,22 @@ where
         loop {
             if self.reader.buffer().len() < size {
                 let future = self.reader.fill_buf();
-                if let Err(_) = tokio::time::timeout(Duration::from_millis(100), future).await {
-                    return Err(ClickHouseClientError::ReadTimeout.into());
+                match tokio::time::timeout(Duration::from_millis(100), future).await {
+                    Ok(value) => match value {
+                        Ok(arr) => {
+                            if arr.len() == 0 {
+                                return Err(ClickHouseClientError::IoError(
+                                    std::io::ErrorKind::UnexpectedEof.into(),
+                                ));
+                            }
+                        }
+                        Err(e) => {
+                            return Err(ClickHouseClientError::IoError(e));
+                        }
+                    },
+                    Err(_) => {
+                        return Err(ClickHouseClientError::ReadTimeout.into());
+                    }
                 }
             } else {
                 return Ok(());
@@ -38,6 +52,7 @@ where
         let mut s = 0_u32;
         let mut i = 0_usize;
         loop {
+            self.guarantee_size(1).await?;
             let future = self.reader.read_u8();
             let b: u8 = match tokio::time::timeout(Duration::from_millis(100), future).await {
                 Ok(value) => value.map_err(|e| ClickHouseClientError::IoError(e))?,
@@ -69,6 +84,7 @@ where
         let result =
             String::from_utf8(temp).map_err(|e| ClickHouseClientError::FromUtf8Error(e))?;
 
+        self.reader.consume(str_len);
         Ok(result)
     }
 
