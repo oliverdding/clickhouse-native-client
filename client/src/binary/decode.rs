@@ -55,6 +55,14 @@ where
             .map_err(|e| ClickHouseClientError::IoError(e))
     }
 
+    pub async fn decode_u8(&mut self) -> Result<u8, ClickHouseClientError> {
+        self.guarantee_size(1).await?;
+        self.reader
+            .read_u8()
+            .await
+            .map_err(|e| ClickHouseClientError::IoError(e))
+    }
+
     pub async fn decode_uvarint(&mut self) -> Result<u64, ClickHouseClientError> {
         let mut x = 0_u64;
         let mut s = 0_u32;
