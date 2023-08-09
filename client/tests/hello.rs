@@ -3,7 +3,7 @@ use core::panic;
 use clickhouse_client::{
     binary::{decode::ClickHouseDecoder, encode::ClickHouseEncoder},
     protocol::{
-        client::{self, ClientPacketCode},
+        client::{self},
         server::{self, ServerPacketCode},
     },
 };

@@ -57,18 +57,18 @@ impl HelloPacket {
         }
     }
 
-    pub fn database(mut self, database: &str) -> HelloPacket {
-        self.database = database.to_owned();
+    pub fn database(mut self, database: impl Into<String>) -> HelloPacket {
+        self.database = database.into();
         self
     }
 
-    pub fn username(mut self, username: &str) -> HelloPacket {
-        self.username = username.to_owned();
+    pub fn username(mut self, username: impl Into<String>) -> HelloPacket {
+        self.username = username.into();
         self
     }
 
-    pub fn password(mut self, password: &str) -> HelloPacket {
-        self.password = password.to_owned();
+    pub fn password(mut self, password: impl Into<String>) -> HelloPacket {
+        self.password = password.into();
         self
     }
 }
