@@ -12,7 +12,7 @@ impl<R> ClickHouseEncoder<R>
 where
     R: AsyncWrite,
 {
-    pub fn new(writer: Pin<Box<R>>) -> Self {
+    pub fn new(writer: R) -> Self {
         Self {
             writer: Box::pin(tokio::io::BufWriter::new(writer)),
         }
@@ -56,6 +56,10 @@ where
         self.writer.shutdown().await?;
         Ok(())
     }
+
+    pub fn get_ref(&self) -> &R {
+        self.writer.get_ref()
+    }
 }
 
 #[cfg(test)]
@@ -65,121 +69,121 @@ mod test {
 
     #[tokio::test]
     async fn test_write_uvarint_1() -> Result<()> {
-        let mut buf = Vec::with_capacity(10);
-        let encoder = ClickHouseEncoder::new(buf);
+        let buf = Vec::with_capacity(10);
+        let mut encoder = ClickHouseEncoder::new(buf);
         let length = encoder.encode_uvarint(1).await?;
         encoder.flush().await?;
 
         assert_eq!(length, 1);
-        assert_eq!(buf, vec![0x01]);
+        assert_eq!(*encoder.get_ref(), vec![0x01]);
         Ok(())
     }
 
     #[tokio::test]
     async fn test_write_uvarint_2() -> Result<()> {
-        let mut buf = Vec::with_capacity(10);
-        let encoder = ClickHouseEncoder::new(buf);
+        let buf = Vec::with_capacity(10);
+        let mut encoder = ClickHouseEncoder::new(buf);
         let length = encoder.encode_uvarint(2).await?;
         encoder.flush().await?;
 
         assert_eq!(length, 1);
-        assert_eq!(buf, vec![0x02]);
+        assert_eq!(*encoder.get_ref(), vec![0x02]);
         Ok(())
     }
 
     #[tokio::test]
     async fn test_write_uvarint_127() -> Result<()> {
-        let mut buf = Vec::with_capacity(10);
-        let encoder = ClickHouseEncoder::new(buf);
+        let buf = Vec::with_capacity(10);
+        let mut encoder = ClickHouseEncoder::new(buf);
         let length = encoder.encode_uvarint(127).await?;
         encoder.flush().await?;
 
         assert_eq!(length, 1);
-        assert_eq!(buf, vec![0x7f]);
+        assert_eq!(*encoder.get_ref(), vec![0x7f]);
         Ok(())
     }
 
     #[tokio::test]
     async fn test_write_uvarint_128() -> Result<()> {
-        let mut buf = Vec::with_capacity(10);
-        let encoder = ClickHouseEncoder::new(buf);
+        let buf = Vec::with_capacity(10);
+        let mut encoder = ClickHouseEncoder::new(buf);
         let length = encoder.encode_uvarint(128).await?;
         encoder.flush().await?;
 
         assert_eq!(length, 2);
-        assert_eq!(buf, vec![0x80, 0x01]);
+        assert_eq!(*encoder.get_ref(), vec![0x80, 0x01]);
         Ok(())
     }
 
     #[tokio::test]
     async fn test_write_uvarint_255() -> Result<()> {
-        let mut buf = Vec::with_capacity(10);
-        let encoder = ClickHouseEncoder::new(buf);
+        let buf = Vec::with_capacity(10);
+        let mut encoder = ClickHouseEncoder::new(buf);
         let length = encoder.encode_uvarint(255).await?;
         encoder.flush().await?;
 
         assert_eq!(length, 2);
-        assert_eq!(buf, vec![0xff, 0x01]);
+        assert_eq!(*encoder.get_ref(), vec![0xff, 0x01]);
         Ok(())
     }
 
     #[tokio::test]
     async fn test_write_uvarint_256() -> Result<()> {
-        let mut buf = Vec::with_capacity(10);
-        let encoder = ClickHouseEncoder::new(buf);
+        let buf = Vec::with_capacity(10);
+        let mut encoder = ClickHouseEncoder::new(buf);
         let length = encoder.encode_uvarint(256).await?;
         encoder.flush().await?;
 
         assert_eq!(length, 2);
-        assert_eq!(buf, vec![0x80, 0x02]);
+        assert_eq!(*encoder.get_ref(), vec![0x80, 0x02]);
         Ok(())
     }
 
     #[tokio::test]
     async fn test_write_uvarint_100500() -> Result<()> {
-        let mut buf = Vec::with_capacity(10);
-        let encoder = ClickHouseEncoder::new(buf);
+        let buf = Vec::with_capacity(10);
+        let mut encoder = ClickHouseEncoder::new(buf);
         let length = encoder.encode_uvarint(100500).await?;
         encoder.flush().await?;
 
         assert_eq!(length, 3);
-        assert_eq!(buf, vec![0x94, 0x91, 0x06]);
+        assert_eq!(*encoder.get_ref(), vec![0x94, 0x91, 0x06]);
         Ok(())
     }
 
     #[tokio::test]
     async fn test_write_string() -> Result<()> {
-        let mut buf = Vec::with_capacity(1024);
-        let encoder = ClickHouseEncoder::new(buf);
+        let buf = Vec::with_capacity(1024);
+        let mut encoder = ClickHouseEncoder::new(buf);
         let length = encoder.encode_string("Hi").await?;
         encoder.flush().await?;
 
         assert_eq!(length, 3);
-        assert_eq!(buf, vec![0x02, 0x48, 0x69]);
+        assert_eq!(*encoder.get_ref(), vec![0x02, 0x48, 0x69]);
         Ok(())
     }
 
     #[tokio::test]
     async fn test_write_bool_true() -> Result<()> {
-        let mut buf = Vec::with_capacity(1);
-        let encoder = ClickHouseEncoder::new(buf);
+        let buf = Vec::with_capacity(1);
+        let mut encoder = ClickHouseEncoder::new(buf);
         let length = encoder.encode_bool(true).await?;
         encoder.flush().await?;
 
         assert_eq!(length, 1);
-        assert_eq!(buf, vec![0x01]);
+        assert_eq!(*encoder.get_ref(), vec![0x01]);
         Ok(())
     }
 
     #[tokio::test]
     async fn test_write_bool_false() -> Result<()> {
-        let mut buf = Vec::with_capacity(1);
-        let encoder = ClickHouseEncoder::new(buf);
+        let buf = Vec::with_capacity(1);
+        let mut encoder = ClickHouseEncoder::new(buf);
         let length = encoder.encode_bool(false).await?;
         encoder.flush().await?;
 
         assert_eq!(length, 1);
-        assert_eq!(buf, vec![0x00]);
+        assert_eq!(*encoder.get_ref(), vec![0x00]);
         Ok(())
     }
 }

@@ -101,7 +101,6 @@ impl HelloPacket {
 mod test {
     use crate::{binary::encode::ClickHouseEncoder, protocol::client};
     use miette::Result;
-    use tokio::io::AsyncBufReadExt;
     use tracing::info;
     use tracing_test::traced_test;
 
@@ -114,7 +113,10 @@ mod test {
         let len = client::HelloPacket::default().encode(&mut encoder).await?;
 
         info!("written hello packet size is: {}", len);
-        info!("written hello packet is:\n{:?}", buf);
+        info!(
+            "written hello packet is:\n{:?}",
+            encoder.get_ref().as_slice()
+        );
         Ok(())
     }
 }
