@@ -1,8 +1,8 @@
+use crate::binary::ClickHouseDecoder;
+use crate::error::Result;
 use tokio::io::AsyncRead;
 
-use crate::{binary::ClickHouseDecoder, error::ClickHouseClientError};
-
-#[derive(Copy, Clone)]
+#[derive(PartialEq, Copy, Clone)]
 pub enum ServerPacketCode {
     Hello = 0,
     Data = 1,
@@ -21,7 +21,28 @@ pub enum ServerPacketCode {
     ProfileEvents = 14,
 }
 
-// TODO: use async-trait for better consistency
+impl From<u8> for ServerPacketCode {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => Self::Hello,
+            1 => Self::Data,
+            2 => Self::Exception,
+            3 => Self::Progress,
+            4 => Self::Pong,
+            5 => Self::EndOfStream,
+            6 => Self::ProfileInfo,
+            7 => Self::Totals,
+            8 => Self::Extremes,
+            9 => Self::TablesStatusResponse,
+            10 => Self::Log,
+            11 => Self::TableColumns,
+            12 => Self::UUIDs,
+            13 => Self::ReadTaskRequest,
+            14 => Self::ProfileEvents,
+            _ => unreachable!(),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct HelloPacket {
@@ -34,33 +55,6 @@ pub struct HelloPacket {
     pub version_patch: u64,
 }
 
-// impl HelloPacket {
-//     pub async fn decode<R>(
-//         decoder: &mut ClickHouseDecoder<R>,
-//     ) -> Result<Self, ClickHouseClientError>
-//     where
-//         R: AsyncRead,
-//         Self: Sized,
-//     {
-//         let name = decoder.decode_string().await?;
-//         let version_major = decoder.decode_uvarint().await?;
-//         let version_minor = decoder.decode_uvarint().await?;
-//         let revision = decoder.decode_uvarint().await?;
-//         let tz = decoder.decode_string().await?;
-//         let display_name = decoder.decode_string().await?;
-//         let version_patch = decoder.decode_uvarint().await?;
-//         Ok(Self {
-//             name,
-//             version_major,
-//             version_minor,
-//             revision,
-//             tz,
-//             display_name,
-//             version_patch,
-//         })
-//     }
-// }
-
 #[derive(Debug, Clone)]
 pub struct ExceptionPacket {
     pub code: i32,
@@ -70,42 +64,63 @@ pub struct ExceptionPacket {
     pub nested: bool,
 }
 
-// impl ExceptionPacket {
-//     pub async fn decode<R>(
-//         decoder: &mut ClickHouseDecoder<R>,
-//     ) -> Result<Self, ClickHouseClientError>
-//     where
-//         R: AsyncRead,
-//         Self: Sized,
-//     {
-//         let code = decoder.decode_i32().await?;
-//         let name = decoder.decode_string().await?;
-//         let message = decoder.decode_string().await?;
-//         let stack_trace = decoder.decode_string().await?;
-//         let nested = decoder.decode_bool().await?;
-//         Ok(Self {
-//             code,
-//             name: name.to_owned(),
-//             message: message.to_owned(),
-//             stack_trace: stack_trace.to_owned(),
-//             nested: nested,
-//         })
-//     }
+#[derive(Debug, Clone)]
+pub struct PongPacket {}
 
-//     pub async fn decode_all<R>(
-//         decoder: &mut ClickHouseDecoder<R>,
-//     ) -> Result<Vec<Self>, ClickHouseClientError>
-//     where
-//         R: AsyncRead,
-//         Self: Sized,
-//     {
-//         let mut exception_list = Vec::new();
-//         let mut has_next = true;
-//         while has_next {
-//             let exception = ExceptionPacket::decode(decoder).await?;
-//             has_next = exception.nested;
-//             exception_list.push(exception);
-//         }
-//         Ok(exception_list)
-//     }
-// }
+#[async_trait::async_trait]
+pub trait ClickHouseRead {
+    async fn read_packet_code(&mut self) -> Result<ServerPacketCode>;
+    async fn read_hello_packet(&mut self) -> Result<HelloPacket>;
+    async fn read_exception_packet(&mut self) -> Result<Vec<ExceptionPacket>>;
+}
+
+#[async_trait::async_trait]
+impl<R> ClickHouseRead for R
+where
+    R: AsyncRead + Unpin + Send + Sync,
+{
+    async fn read_packet_code(&mut self) -> Result<ServerPacketCode> {
+        Ok(ServerPacketCode::from(self.decode_u8().await?))
+    }
+
+    async fn read_hello_packet(&mut self) -> Result<HelloPacket> {
+        let name = self.decode_utf8_string().await?;
+        let version_major = self.decode_var_uint().await?;
+        let version_minor = self.decode_var_uint().await?;
+        let revision = self.decode_var_uint().await?;
+        let tz = self.decode_utf8_string().await?;
+        let display_name = self.decode_utf8_string().await?;
+        let version_patch = self.decode_var_uint().await?;
+        Ok(HelloPacket {
+            name,
+            version_major,
+            version_minor,
+            revision,
+            tz,
+            display_name,
+            version_patch,
+        })
+    }
+
+    async fn read_exception_packet(&mut self) -> Result<Vec<ExceptionPacket>> {
+        let mut exception_list = Vec::new();
+        loop {
+            let code = self.decode_i32().await?;
+            let name = self.decode_utf8_string().await?;
+            let message = self.decode_utf8_string().await?;
+            let stack_trace = self.decode_utf8_string().await?;
+            let nested = self.decode_bool().await?;
+            exception_list.push(ExceptionPacket {
+                code,
+                name: name.to_owned(),
+                message: message.to_owned(),
+                stack_trace: stack_trace.to_owned(),
+                nested: nested,
+            });
+            if !nested {
+                break;
+            }
+        }
+        Ok(exception_list)
+    }
+}

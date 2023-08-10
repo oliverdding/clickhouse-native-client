@@ -17,4 +17,4 @@ async-trait = "0.1.72"
 [dev-dependencies]
 miette = { version = "5.10.0", features = ["fancy"] }
 tracing-subscriber = "0.3.17"
-tracing-test = "0.2.4"
+tracing-test = {version="0.2.4", features = ["no-env-filter"]}
