@@ -17,7 +17,7 @@ pub enum ClientPacketCode {
     Data = 2,
     Cancel = 3,
     Ping = 4,
-    TableStatus = 5,
+    TableStatus = 5, // TODO: not implemented yet
 }
 
 #[derive(Debug, Clone)]
