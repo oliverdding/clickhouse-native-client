@@ -12,6 +12,7 @@ thiserror = "1.0.44"
 bytes = "1.4.0"
 tracing = "0.1.37"
 clickhouse-rs-cityhash-sys = "0.1.2"
+async-trait = "0.1.72"
 
 [dev-dependencies]
 miette = { version = "5.10.0", features = ["fancy"] }

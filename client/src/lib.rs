@@ -1,3 +1,5 @@
 pub mod binary;
-pub mod error;
+mod error;
 pub mod protocol;
+
+pub use error::*;

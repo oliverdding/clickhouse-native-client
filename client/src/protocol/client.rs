@@ -1,6 +1,6 @@
 use tokio::io::AsyncWrite;
 
-use crate::{binary::encode::ClickHouseEncoder, error::ClickHouseClientError};
+use crate::{binary::ClickHouseEncoder, error::ClickHouseClientError};
 
 #[derive(Copy, Clone)]
 pub enum ClientPacketCode {
@@ -12,18 +12,18 @@ pub enum ClientPacketCode {
     TableStatus = 5,
 }
 
-impl ClientPacketCode {
-    pub async fn encode<R>(
-        &self,
-        encoder: &mut ClickHouseEncoder<R>,
-    ) -> Result<usize, ClickHouseClientError>
-    where
-        R: AsyncWrite,
-    {
-        encoder.encode_u8(*self as u8).await?;
-        Ok(1)
-    }
-}
+// impl ClientPacketCode {
+//     pub async fn encode<R>(
+//         &self,
+//         encoder: &mut ClickHouseEncoder<R>,
+//     ) -> Result<usize, ClickHouseClientError>
+//     where
+//         R: AsyncWrite,
+//     {
+//         encoder.encode_u8(*self as u8).await?;
+//         Ok(1)
+//     }
+// }
 
 #[derive(Debug, Clone)]
 pub struct HelloPacket {
@@ -73,50 +73,50 @@ impl HelloPacket {
     }
 }
 
-impl HelloPacket {
-    pub async fn encode<R>(
-        &self,
-        encoder: &mut ClickHouseEncoder<R>,
-    ) -> Result<usize, ClickHouseClientError>
-    where
-        R: AsyncWrite,
-    {
-        let mut len: usize = 0;
-        len += ClientPacketCode::Hello.encode(encoder).await?;
-        len += encoder.encode_string(&self.client_name).await?;
-        len += encoder.encode_uvarint(self.version_major).await?;
-        len += encoder.encode_uvarint(self.version_minor).await?;
-        len += encoder.encode_uvarint(self.protocol_version).await?;
-        len += encoder.encode_string(&self.database).await?;
-        len += encoder.encode_string(&self.username).await?;
-        len += encoder.encode_string(&self.password).await?;
+// impl HelloPacket {
+//     pub async fn encode<R>(
+//         &self,
+//         encoder: &mut ClickHouseEncoder<R>,
+//     ) -> Result<usize, ClickHouseClientError>
+//     where
+//         R: AsyncWrite,
+//     {
+//         let mut len: usize = 0;
+//         len += ClientPacketCode::Hello.encode(encoder).await?;
+//         len += encoder.encode_string(&self.client_name).await?;
+//         len += encoder.encode_uvarint(self.version_major).await?;
+//         len += encoder.encode_uvarint(self.version_minor).await?;
+//         len += encoder.encode_uvarint(self.protocol_version).await?;
+//         len += encoder.encode_string(&self.database).await?;
+//         len += encoder.encode_string(&self.username).await?;
+//         len += encoder.encode_string(&self.password).await?;
 
-        encoder.flush().await?;
+//         encoder.flush().await?;
 
-        Ok(len)
-    }
-}
+//         Ok(len)
+//     }
+// }
 
-#[cfg(test)]
-mod test {
-    use crate::{binary::encode::ClickHouseEncoder, protocol::client};
-    use miette::Result;
-    use tracing::info;
-    use tracing_test::traced_test;
+// #[cfg(test)]
+// mod test {
+//     use crate::{binary::encode::ClickHouseEncoder, protocol::client};
+//     use miette::Result;
+//     use tracing::info;
+//     use tracing_test::traced_test;
 
-    #[traced_test]
-    #[tokio::test]
-    async fn test_client_hello() -> Result<()> {
-        let buf = Vec::new();
-        let mut encoder = ClickHouseEncoder::new(buf);
+//     #[traced_test]
+//     #[tokio::test]
+//     async fn test_client_hello() -> Result<()> {
+//         let buf = Vec::new();
+//         let mut encoder = ClickHouseEncoder::new(buf);
 
-        let len = client::HelloPacket::default().encode(&mut encoder).await?;
+//         let len = client::HelloPacket::default().encode(&mut encoder).await?;
 
-        info!("written hello packet size is: {}", len);
-        info!(
-            "written hello packet is:\n{:?}",
-            encoder.get_ref().as_slice()
-        );
-        Ok(())
-    }
-}
+//         info!("written hello packet size is: {}", len);
+//         info!(
+//             "written hello packet is:\n{:?}",
+//             encoder.get_ref().as_slice()
+//         );
+//         Ok(())
+//     }
+// }

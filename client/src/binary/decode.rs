@@ -1,145 +1,104 @@
-use std::pin::Pin;
-use std::time::Duration;
+use tokio::io::{AsyncRead, AsyncReadExt};
 
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt};
+use crate::error::{ClickHouseClientError, Result};
+use crate::protocol::{MAX_STRING_SIZE, MAX_VARINT_LEN64};
 
-use crate::binary::MAX_VARINT_LEN64;
-use crate::error::ClickHouseClientError;
+#[async_trait::async_trait]
+pub trait ClickHouseDecoder {
+    async fn decode_u8(&mut self) -> Result<u8>;
 
-pub struct ClickHouseDecoder<R> {
-    reader: Pin<Box<tokio::io::BufReader<R>>>,
-}
+    async fn decode_i32(&mut self) -> Result<i32>;
 
-impl<R> ClickHouseDecoder<R>
-where
-    R: AsyncRead,
-{
-    pub fn new(reader: R) -> Self {
-        Self {
-            reader: Box::pin(tokio::io::BufReader::new(reader)), // TODO: why should I pin reader here?
-        }
-    }
-
-    async fn guarantee_size(&mut self, size: usize) -> Result<(), ClickHouseClientError> {
-        loop {
-            if self.reader.buffer().len() < size {
-                let future = self.reader.fill_buf();
-                match tokio::time::timeout(Duration::from_millis(100), future).await {
-                    Ok(value) => match value {
-                        Ok(arr) => {
-                            if arr.len() == 0 {
-                                return Err(ClickHouseClientError::IoError(
-                                    std::io::ErrorKind::UnexpectedEof.into(),
-                                ));
-                            }
-                        }
-                        Err(e) => {
-                            return Err(ClickHouseClientError::IoError(e));
-                        }
-                    },
-                    Err(_) => {
-                        return Err(ClickHouseClientError::ReadTimeout);
-                    }
-                }
-            } else {
-                return Ok(());
-            }
-        }
-    }
-
-    pub async fn decode_i32(&mut self) -> Result<i32, ClickHouseClientError> {
-        self.guarantee_size(4).await?;
-        self.reader
-            .read_i32_le()
-            .await
-            .map_err(|e| ClickHouseClientError::IoError(e))
-    }
-
-    pub async fn decode_u8(&mut self) -> Result<u8, ClickHouseClientError> {
-        self.guarantee_size(1).await?;
-        self.reader
-            .read_u8()
-            .await
-            .map_err(|e| ClickHouseClientError::IoError(e))
-    }
-
-    pub async fn decode_uvarint(&mut self) -> Result<u64, ClickHouseClientError> {
-        let mut x = 0_u64;
-        let mut s = 0_u32;
-        let mut i = 0_usize;
-        loop {
-            self.guarantee_size(1).await?;
-            let future = self.reader.read_u8();
-            let b: u8 = match tokio::time::timeout(Duration::from_millis(100), future).await {
-                Ok(value) => value.map_err(|e| ClickHouseClientError::IoError(e))?,
-                Err(_) => return Err(ClickHouseClientError::ReadTimeout),
-            };
-
-            if b < 0x80 {
-                if i == MAX_VARINT_LEN64 || i == (MAX_VARINT_LEN64 - 1) && b > 1 {
-                    return Err(ClickHouseClientError::UVarintOverFlow);
-                }
-                return Ok(x | (u64::from(b) << s));
-            }
-
-            x |= u64::from(b & 0x7f) << s;
-            s += 7;
-
-            i += 1;
-        }
-    }
-
-    pub async fn decode_string(&mut self) -> Result<String, ClickHouseClientError> {
-        let str_len = self.decode_uvarint().await? as usize;
-        self.guarantee_size(str_len).await?;
-
-        let buffer = self.reader.buffer();
-        let mut temp = vec![0; str_len];
-        temp.copy_from_slice(&buffer[..str_len]);
-
-        let result =
-            String::from_utf8(temp).map_err(|e| ClickHouseClientError::FromUtf8Error(e))?;
-
-        self.reader.consume(str_len);
-        Ok(result)
-    }
-
-    pub async fn decode_bool(&mut self) -> Result<bool, ClickHouseClientError> {
-        self.guarantee_size(1).await?;
-        match self
-            .reader
-            .read_u8()
-            .await
-            .map_err(|e| ClickHouseClientError::IoError(e))?
-        {
+    async fn decode_bool(&mut self) -> Result<bool> {
+        match self.decode_u8().await? {
             0 => Ok(false),
             1 => Ok(true),
-            _ => Err(ClickHouseClientError::UnknownByte),
+            _ => Err(ClickHouseClientError::DecodeError(
+                "invalid byte when decoding bool".into(),
+            )),
         }
+    }
+
+    async fn decode_var_uint(&mut self) -> Result<u64>;
+
+    async fn decode_string(&mut self) -> Result<Vec<u8>>;
+
+    async fn decode_utf8_string(&mut self) -> Result<String> {
+        Ok(String::from_utf8(self.decode_string().await?)?)
+    }
+}
+
+#[async_trait::async_trait]
+impl<R> ClickHouseDecoder for R
+where
+    R: AsyncRead + Unpin + Send + Sync,
+{
+    async fn decode_u8(&mut self) -> Result<u8> {
+        Ok(self.read_u8().await?)
+    }
+
+    async fn decode_i32(&mut self) -> Result<i32> {
+        Ok(self.read_i32_le().await?)
+    }
+
+    async fn decode_var_uint(&mut self) -> Result<u64> {
+        let mut result = 0_u64;
+        for i in 0..MAX_VARINT_LEN64 {
+            let b = self.read_u8().await?;
+            if (b & 0x80) == 0 {
+                if i == (MAX_VARINT_LEN64 - 1) && b > 1 {
+                    return Err(ClickHouseClientError::DecodeError(
+                        "overflow when decoding var uint".into(),
+                    ));
+                }
+                return Ok(result | (u64::from(b) << (7 * i)));
+            }
+            result |= u64::from(b & 0x7F) << (7 * i);
+        }
+        Err(ClickHouseClientError::DecodeError(
+            "overflow when decoding var uint".into(),
+        ))
+    }
+
+    async fn decode_string(&mut self) -> Result<Vec<u8>> {
+        let len = self.decode_var_uint().await?;
+        if len as usize > MAX_STRING_SIZE {
+            return Err(ClickHouseClientError::DecodeError(
+                "size is too long when decoding string".into(),
+            ));
+        }
+
+        if len == 0 {
+            return Ok(Vec::new());
+        }
+
+        let mut buf = vec![0_u8; len as usize];
+        self.read_exact(&mut buf).await?;
+
+        Ok(buf)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::binary::decode::ClickHouseDecoder;
-    use crate::binary::encode::ClickHouseEncoder;
-    use crate::binary::MAX_VARINT_LEN64;
+    use crate::binary::ClickHouseDecoder;
+    use crate::binary::ClickHouseEncoder;
+    use crate::protocol::MAX_STRING_SIZE;
+    use crate::protocol::MAX_VARINT_LEN64;
 
     use miette::Result;
 
     #[tokio::test]
     async fn test_decode_uvarint() -> Result<()> {
+        let mut buf: Vec<u8> = Vec::with_capacity(MAX_STRING_SIZE);
         for expected in 0..10240 {
-            let buf = Vec::with_capacity(10);
-            let mut encoder = ClickHouseEncoder::new(buf);
-            encoder.encode_uvarint(expected).await?;
-            encoder.flush().await?;
+            let _ = buf.encode_var_uint(expected).await?;
 
-            let mut decoder = ClickHouseDecoder::new(encoder.get_ref().as_slice());
-            let actual = decoder.decode_uvarint().await?;
+            let mut buffer = buf.as_slice();
+            let actual = buffer.decode_var_uint().await?;
 
             assert_eq!(actual, expected);
-            encoder.shutdown().await?;
+            buf.clear();
         }
         Ok(())
     }
@@ -147,53 +106,47 @@ mod test {
     #[tokio::test]
     async fn test_decode_continus_uvarint() -> Result<()> {
         const MAX: usize = 10000;
-        let buf = Vec::with_capacity(10);
-        let mut encoder = ClickHouseEncoder::new(buf);
+        let mut buf: Vec<u8> = Vec::with_capacity(MAX_VARINT_LEN64 * MAX);
         for expected in 0..(MAX / MAX_VARINT_LEN64) {
-            encoder.encode_uvarint(expected as u64).await?;
+            buf.encode_var_uint(expected as u64).await?;
         }
-        encoder.flush().await?;
 
-        let mut decoder = ClickHouseDecoder::new(encoder.get_ref().as_slice());
+        let mut buffer = buf.as_slice();
         for expected in 0..(MAX / MAX_VARINT_LEN64) {
-            let actual = decoder.decode_uvarint().await?;
+            let actual = buffer.decode_var_uint().await?;
             assert_eq!(actual, expected as u64);
         }
-        encoder.shutdown().await?;
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_read_string() -> Result<()> {
-        for expected in vec!["hello world", "rust!", "你好", "❤️‍🔥"] {
-            let buf = Vec::with_capacity(1024);
-            let mut encoder = ClickHouseEncoder::new(buf);
-            encoder.encode_string(expected).await?;
-            encoder.flush().await?;
+    async fn test_decode_string() -> Result<()> {
+        let mut buf: Vec<u8> = Vec::with_capacity(MAX_STRING_SIZE);
+        for expected in vec!["❤️‍🔥", "Hello", "你好", "こんにちは", "안녕하세요", "Привет"]
+        {
+            let _ = buf.encode_utf8_string(expected).await?;
 
-            let mut decoder = ClickHouseDecoder::new(encoder.get_ref().as_slice());
-            let actual = decoder.decode_string().await?;
+            let mut buffer = buf.as_slice();
+            let actual = buffer.decode_utf8_string().await?;
 
             assert_eq!(actual, expected);
-            encoder.shutdown().await?;
+            buf.clear();
         }
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_read_bool() -> Result<()> {
-        for expected in vec![true, false] {
-            let buf = Vec::with_capacity(1);
-            let mut encoder = ClickHouseEncoder::new(buf);
-            encoder.encode_bool(expected).await?;
-            encoder.flush().await?;
+    async fn test_decode_bool() -> Result<()> {
+        let mut buf: Vec<u8> = Vec::with_capacity(2);
+        buf.encode_bool(true).await?;
+        buf.encode_bool(false).await?;
 
-            let mut decoder = ClickHouseDecoder::new(encoder.get_ref().as_slice());
-            let actual = decoder.decode_bool().await?;
+        let mut buffer = buf.as_slice();
 
-            assert_eq!(actual, expected);
-            encoder.shutdown().await?;
-        }
+        let actual = buffer.decode_bool().await?;
+        assert_eq!(actual, true);
+        let actual = buffer.decode_bool().await?;
+        assert_eq!(actual, false);
         Ok(())
     }
 }
