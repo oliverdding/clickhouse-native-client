@@ -146,14 +146,12 @@ pub struct Column {
 #[derive(Debug, Clone)]
 pub struct CancelPacket {}
 
-#[async_trait::async_trait]
 pub trait ClickHouseWrite {
     async fn write_packet_code(&mut self, x: ClientPacketCode) -> Result<usize>;
     async fn write_hello_packet(&mut self, x: HelloPacket) -> Result<usize>;
     async fn write_ping_packet(&mut self) -> Result<usize>;
 }
 
-#[async_trait::async_trait]
 impl<R> ClickHouseWrite for R
 where
     R: AsyncWrite + Unpin + Send + Sync,
@@ -184,7 +182,7 @@ where
 #[cfg(test)]
 mod test {
     use crate::protocol::client::{self, ClickHouseWrite};
-    use miette::Result;
+    use anyhow::Result;
     use tracing::info;
     use tracing_test::traced_test;
 

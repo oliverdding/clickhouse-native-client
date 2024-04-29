@@ -3,32 +3,52 @@ use tokio::io::{AsyncRead, AsyncReadExt};
 use crate::error::{ClickHouseClientError, Result};
 use crate::protocol::{MAX_STRING_SIZE, MAX_VARINT_LEN64};
 
-#[async_trait::async_trait]
+use futures::future::FutureExt;
+
 pub trait ClickHouseDecoder {
-    async fn decode_u8(&mut self) -> Result<u8>;
+    fn decode_u8(
+        &mut self,
+    ) -> impl std::future::Future<Output = Result<u8>> + Send;
 
-    async fn decode_i32(&mut self) -> Result<i32>;
+    fn decode_i32(
+        &mut self,
+    ) -> impl std::future::Future<Output = Result<i32>> + Send;
 
-    async fn decode_bool(&mut self) -> Result<bool> {
-        match self.decode_u8().await? {
-            0 => Ok(false),
-            1 => Ok(true),
-            _ => Err(ClickHouseClientError::DecodeError(
+    fn decode_var_uint(
+        &mut self,
+    ) -> impl std::future::Future<Output = Result<u64>> + Send;
+
+    fn decode_string(
+        &mut self,
+    ) -> impl std::future::Future<Output = Result<Vec<u8>>> + Send;
+}
+
+pub trait ClickHouseDecoderExt: ClickHouseDecoder {
+    fn decode_bool(
+        &mut self,
+    ) -> impl std::future::Future<Output = Result<bool>> + Send {
+        self.decode_u8().map(|x| match x {
+            Ok(0) => Ok(false),
+            Ok(1) => Ok(true),
+            Ok(_) => Err(ClickHouseClientError::DecodeError(
                 "invalid byte when decoding bool".into(),
             )),
-        }
+            Err(e) => Err(e),
+        })
     }
 
-    async fn decode_var_uint(&mut self) -> Result<u64>;
-
-    async fn decode_string(&mut self) -> Result<Vec<u8>>;
-
-    async fn decode_utf8_string(&mut self) -> Result<String> {
-        Ok(String::from_utf8(self.decode_string().await?)?)
+    fn decode_utf8_string(
+        &mut self,
+    ) -> impl std::future::Future<Output = Result<String>> + Send {
+        self.decode_string().map(|x| match x {
+            Ok(x) => String::from_utf8(x).map_err(|e| e.into()),
+            Err(e) => Err(e),
+        })
     }
 }
 
-#[async_trait::async_trait]
+impl<T: ?Sized> ClickHouseDecoderExt for T where T: ClickHouseDecoder {}
+
 impl<R> ClickHouseDecoder for R
 where
     R: AsyncRead + Unpin + Send + Sync,
@@ -81,12 +101,13 @@ where
 
 #[cfg(test)]
 mod test {
+    use crate::binary::decode::ClickHouseDecoderExt;
     use crate::binary::ClickHouseDecoder;
     use crate::binary::ClickHouseEncoder;
     use crate::protocol::MAX_STRING_SIZE;
     use crate::protocol::MAX_VARINT_LEN64;
 
-    use miette::Result;
+    use anyhow::Result;
 
     #[tokio::test]
     async fn test_decode_uvarint() -> Result<()> {
@@ -122,7 +143,8 @@ mod test {
     #[tokio::test]
     async fn test_decode_string() -> Result<()> {
         let mut buf: Vec<u8> = Vec::with_capacity(MAX_STRING_SIZE);
-        for expected in vec!["❤️‍🔥", "Hello", "你好", "こんにちは", "안녕하세요", "Привет"]
+        for expected in
+            vec!["❤️‍🔥", "Hello", "你好", "こんにちは", "안녕하세요", "Привет"]
         {
             let _ = buf.encode_utf8_string(expected).await?;
 

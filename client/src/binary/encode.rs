@@ -1,26 +1,39 @@
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::error::Result;
-#[async_trait::async_trait]
+
 pub trait ClickHouseEncoder {
-    async fn encode_u8(&mut self, x: u8) -> Result<usize>;
+    fn encode_u8(
+        &mut self,
+        x: u8,
+    ) -> impl std::future::Future<Output = Result<usize>> + Send;
 
-    async fn encode_i32(&mut self, x: i32) -> Result<usize>;
+    fn encode_i32(
+        &mut self,
+        x: i32,
+    ) -> impl std::future::Future<Output = Result<usize>> + Send;
 
-    async fn encode_bool(&mut self, x: bool) -> Result<usize> {
-        self.encode_u8(x as u8).await
-    }
+    fn encode_var_uint(
+        &mut self,
+        x: u64,
+    ) -> impl std::future::Future<Output = Result<usize>> + Send;
 
-    async fn encode_var_uint(&mut self, x: u64) -> Result<usize>;
+    fn encode_string(
+        &mut self,
+        x: impl AsRef<[u8]> + Send,
+    ) -> impl std::future::Future<Output = Result<usize>> + Send;
 
-    async fn encode_string(&mut self, x: impl AsRef<[u8]> + Send) -> Result<usize>;
+    fn encode_bool(
+        &mut self,
+        x: bool,
+    ) -> impl std::future::Future<Output = Result<usize>> + Send;
 
-    async fn encode_utf8_string(&mut self, x: impl Into<String> + Send) -> Result<usize> {
-        self.encode_string(x.into().as_bytes()).await
-    }
+    fn encode_utf8_string(
+        &mut self,
+        x: impl AsRef<str> + Send,
+    ) -> impl std::future::Future<Output = Result<usize>> + Send;
 }
 
-#[async_trait::async_trait]
 impl<R> ClickHouseEncoder for R
 where
     R: AsyncWrite + Unpin + Send + Sync,
@@ -47,19 +60,33 @@ where
         Ok(i + 1)
     }
 
-    async fn encode_string(&mut self, x: impl AsRef<[u8]> + Send) -> Result<usize> {
+    async fn encode_string(
+        &mut self,
+        x: impl AsRef<[u8]> + Send,
+    ) -> Result<usize> {
         let x = x.as_ref();
         let str_len = x.len();
         let header_len = self.encode_var_uint(str_len as u64).await?;
         self.write_all(x).await?;
         Ok(header_len + str_len)
     }
+
+    async fn encode_bool(&mut self, x: bool) -> Result<usize> {
+        self.encode_u8(x as u8).await
+    }
+
+    async fn encode_utf8_string(
+        &mut self,
+        x: impl AsRef<str> + Send,
+    ) -> Result<usize> {
+        self.encode_string(x.as_ref().as_bytes()).await
+    }
 }
 
 #[cfg(test)]
 mod test {
     use crate::{binary::ClickHouseEncoder, protocol::MAX_VARINT_LEN64};
-    use miette::Result;
+    use anyhow::Result;
 
     #[tokio::test]
     async fn test_write_var_uint_1() -> Result<()> {

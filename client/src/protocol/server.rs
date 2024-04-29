@@ -1,4 +1,4 @@
-use crate::binary::ClickHouseDecoder;
+use crate::binary::{ClickHouseDecoder, ClickHouseDecoderExt};
 use crate::error::Result;
 use tokio::io::AsyncRead;
 
@@ -67,14 +67,12 @@ pub struct ExceptionPacket {
 #[derive(Debug, Clone)]
 pub struct PongPacket {}
 
-#[async_trait::async_trait]
 pub trait ClickHouseRead {
     async fn read_packet_code(&mut self) -> Result<ServerPacketCode>;
     async fn read_hello_packet(&mut self) -> Result<HelloPacket>;
     async fn read_exception_packet(&mut self) -> Result<Vec<ExceptionPacket>>;
 }
 
-#[async_trait::async_trait]
 impl<R> ClickHouseRead for R
 where
     R: AsyncRead + Unpin + Send + Sync,

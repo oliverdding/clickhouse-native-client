@@ -7,14 +7,13 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "^1.5", features = ["full"] }
-miette = "5.10.0"
-thiserror = "1.0.44"
-bytes = "1.4.0"
-tracing = "0.1.37"
+thiserror = "^1"
+bytes = "^1"
+tracing = "^0.1"
+futures = "^0.3"
 clickhouse-rs-cityhash-sys = "0.1.2"
-async-trait = "0.1.72"
 
 [dev-dependencies]
-miette = { version = "5.10.0", features = ["fancy"] }
-tracing-subscriber = "0.3.17"
+anyhow = "^1"
+tracing-subscriber = "^0.3"
 tracing-test = {version="0.2.4", features = ["no-env-filter"]}

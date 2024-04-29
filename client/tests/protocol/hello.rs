@@ -9,7 +9,7 @@ use tokio::{io::AsyncWriteExt, net::TcpStream};
 use tracing::info;
 use tracing_test::traced_test;
 
-use miette::Result;
+use anyhow::Result;
 
 #[traced_test]
 #[tokio::test]
