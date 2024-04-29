@@ -1,9 +1,8 @@
 use tokio::io::AsyncWrite;
 
 use crate::binary::ClickHouseEncoder;
-
 use crate::error::Result;
-
+use crate::protocol::client::{ClickHouseWritePacketCode, ClientPacketCode};
 use crate::protocol::{
     CLICKHOUSE_CLIENT_NAME, CLICKHOUSE_DEFAULT_DATABASE,
     CLICKHOUSE_DEFAULT_PASSWORD, CLICKHOUSE_DEFAULT_USERNAME,
@@ -11,22 +10,19 @@ use crate::protocol::{
     CLICKHOUSE_VERSION_MINOR,
 };
 
-#[derive(PartialEq, Copy, Clone)]
-pub enum ClientPacketCode {
-    Hello = 0,
-    Query = 1,
-    Data = 2,
-    Cancel = 3,
-    Ping = 4,
-    TableStatus = 5, // TODO: not implemented yet
-}
-
 #[derive(Debug, Clone)]
 pub struct HelloPacket {
     client_name: String,
-    version_major: u64,
-    version_minor: u64,
+
+    version_major: u64, // client major version
+    version_minor: u64, // client minor version
+
+    // ProtocolVersion is TCP protocol version of client.
+    //
+    // Usually it is equal to the latest compatible server revision, but
+    // should not be confused with it.
     protocol_version: u64,
+
     pub database: String,
     pub username: String,
     pub password: String,
@@ -63,117 +59,17 @@ impl HelloPacket {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct QueryPacket {
-    pub query_id: String,
-    pub client_info: ClientInfo,
-    pub settings: Settings,
-    pub secret: String,
-    pub stage: Stage,
-    pub compression: u64,
-    pub body: String,
-}
-
-#[derive(PartialEq, Debug, Clone)]
-pub enum Stage {
-    FetchColumns = 0,
-    WithMergeableState = 1,
-    Complete = 2,
-}
-
-#[derive(Debug, Clone)]
-pub struct ClientInfo {
-    pub query_kind: QueryKind,
-    pub initial_user: String,
-    pub initial_query_id: String,
-    pub initial_address: String,
-    pub initial_time: i64,
-    pub interface: ClientInterface,
-    pub os_user: String,
-    pub client_hostname: String,
-    pub client_name: String,
-    pub version_major: u64,
-    pub version_minor: u64,
-    pub version_patch: u64,
-    pub protocol_version: u64,
-    pub quota_key: String,
-    pub distributed_depth: u64,
-    pub otel: bool,
-    pub trace_id: String,
-    pub span_id: String,
-    pub trace_state: String,
-    pub trace_flags: u8,
-}
-
-#[derive(PartialEq, Debug, Clone)]
-pub enum QueryKind {
-    None = 0,
-    Initial = 1,
-    Secondary = 2,
-}
-
-#[derive(PartialEq, Debug, Clone)]
-pub enum ClientInterface {
-    TCP = 1,
-    HTTP = 2,
-}
-
-#[derive(Debug, Clone)]
-pub struct Settings {
-    pub key: String,
-    pub value: String,
-    pub important: bool,
-}
-
-#[derive(Debug, Clone)]
-pub struct DataPacket {
-    pub info: BlockInfo,
-    pub columns_count: u64,
-    pub rows_count: u64,
-    pub columns: Vec<Column>,
-}
-
-#[derive(Debug, Clone)]
-pub struct BlockInfo {
-    pub overflows: bool,
-    pub bucket_num: i32,
-}
-
-#[derive(Debug, Clone)]
-pub struct Column {
-    pub name: String,
-    pub column_type: String,
-    pub data: Vec<u8>,
-}
-
-#[derive(Debug, Clone)]
-pub struct CancelPacket {}
-
-pub trait ClickHouseWrite {
-    fn write_packet_code(
-        &mut self,
-        x: ClientPacketCode,
-    ) -> impl std::future::Future<Output = Result<usize>> + Send;
+pub trait ClickHouseWriteHelloPacket: ClickHouseWritePacketCode {
     fn write_hello_packet(
         &mut self,
         x: HelloPacket,
     ) -> impl std::future::Future<Output = Result<usize>> + Send;
-    fn write_ping_packet(
-        &mut self,
-    ) -> impl std::future::Future<Output = Result<usize>> + Send;
 }
 
-impl<R> ClickHouseWrite for R
+impl<R> ClickHouseWriteHelloPacket for R
 where
     R: AsyncWrite + Unpin + Send + Sync,
 {
-    async fn write_packet_code(
-        &mut self,
-        x: ClientPacketCode,
-    ) -> Result<usize> {
-        self.encode_u8(x as u8).await
-    }
-
     async fn write_hello_packet(&mut self, x: HelloPacket) -> Result<usize> {
         let mut len: usize = 0;
         len += self.write_packet_code(ClientPacketCode::Hello).await?;
@@ -187,17 +83,15 @@ where
 
         Ok(len)
     }
-
-    async fn write_ping_packet(&mut self) -> Result<usize> {
-        self.write_packet_code(ClientPacketCode::Ping).await
-    }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::protocol::client::{self, ClickHouseWrite};
     use anyhow::Result;
     use tracing_test::traced_test;
+
+    use crate::protocol::client;
+    use crate::protocol::client::hello::ClickHouseWriteHelloPacket;
 
     #[traced_test]
     #[tokio::test]
@@ -227,3 +121,4 @@ mod test {
            .all(|(a,b)| *a == *b)
     }
 }
+

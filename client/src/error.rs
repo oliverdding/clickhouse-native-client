@@ -1,6 +1,7 @@
 use thiserror::Error;
 
 #[derive(Error, Debug)]
+#[error("...")]
 pub enum ClickHouseClientError {
     #[error("decode error: {0}")]
     DecodeError(String),
@@ -19,10 +20,10 @@ pub enum ClickHouseClientError {
     #[error("timeout when reading from remote")]
     ReadTimeout,
 
-    #[error(transparent)]
+    #[error("{0}")]
     Utf8Error(#[from] std::string::FromUtf8Error),
 
-    #[error(transparent)]
+    #[error("{0}")]
     IoError(#[from] std::io::Error),
 }
 
