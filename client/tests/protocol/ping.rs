@@ -1,7 +1,7 @@
 use core::panic;
 
 use clickhouse_client::protocol::{
-    client::{self, ClickHouseWrite},
+    client::{self, ClickHouseWriteHelloPacket, ClickHouseWritePingPacket},
     server::{ClickHouseRead, ServerPacketCode},
 };
 

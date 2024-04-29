@@ -1,8 +1,7 @@
 use core::panic;
 
 use clickhouse_client::protocol::{
-    client::{self, ClickHouseWrite},
-    server::{ClickHouseRead, ServerPacketCode},
+    client::{self, ClickHouseWriteHelloPacket}, server::{ClickHouseRead, ServerPacketCode}
 };
 
 use tokio::{io::AsyncWriteExt, net::TcpStream};

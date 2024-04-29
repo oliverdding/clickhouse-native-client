@@ -4,9 +4,10 @@ mod ping;
 mod query;
 
 pub use data::{BlockInfo, Column, DataPacket};
-pub use hello::HelloPacket;
+pub use hello::{ClickHouseWriteHelloPacket, HelloPacket};
+pub use ping::ClickHouseWritePingPacket;
 pub use query::{
-    ClientInfo, Interface, ClientQueryKind, QueryPacket, Settings, Stage,
+    ClientInfo, ClientQueryKind, Interface, QueryPacket, Settings, Stage,
 };
 
 use tokio::io::AsyncWrite;
