@@ -28,7 +28,7 @@ async fn ping() -> Result<()> {
         }
         ServerPacketCode::Exception => {
             let result = reader.read_exception_packet().await?;
-            info!("received exception packet: {:?}", result);
+            panic!("received exception packet: {:?}", result);
         }
         _ => panic!("unexpected packet code"),
     }
@@ -41,7 +41,7 @@ async fn ping() -> Result<()> {
         }
         ServerPacketCode::Exception => {
             let result = reader.read_exception_packet().await?;
-            info!("received exception packet: {:?}", result);
+            panic!("received exception packet: {:?}", result);
         }
         _ => panic!("unexpected packet code"),
     }

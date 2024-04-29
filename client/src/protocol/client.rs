@@ -5,8 +5,9 @@ use crate::binary::ClickHouseEncoder;
 use crate::error::Result;
 
 use crate::protocol::{
-    CLICKHOUSE_CLIENT_NAME, CLICKHOUSE_DEFAULT_DATABASE, CLICKHOUSE_DEFAULT_PASSWORD,
-    CLICKHOUSE_DEFAULT_USERNAME, CLICKHOUSE_PROTOCOL_VERSION, CLICKHOUSE_VERSION_MAJOR,
+    CLICKHOUSE_CLIENT_NAME, CLICKHOUSE_DEFAULT_DATABASE,
+    CLICKHOUSE_DEFAULT_PASSWORD, CLICKHOUSE_DEFAULT_USERNAME,
+    CLICKHOUSE_PROTOCOL_VERSION, CLICKHOUSE_VERSION_MAJOR,
     CLICKHOUSE_VERSION_MINOR,
 };
 
@@ -31,8 +32,8 @@ pub struct HelloPacket {
     pub password: String,
 }
 
-impl HelloPacket {
-    pub fn default() -> Self {
+impl Default for HelloPacket {
+    fn default() -> Self {
         Self {
             client_name: CLICKHOUSE_CLIENT_NAME.to_owned(),
             version_major: CLICKHOUSE_VERSION_MAJOR,
@@ -43,7 +44,9 @@ impl HelloPacket {
             password: CLICKHOUSE_DEFAULT_PASSWORD.to_owned(),
         }
     }
+}
 
+impl HelloPacket {
     pub fn database(mut self, database: impl Into<String>) -> HelloPacket {
         self.database = database.into();
         self
@@ -147,16 +150,27 @@ pub struct Column {
 pub struct CancelPacket {}
 
 pub trait ClickHouseWrite {
-    async fn write_packet_code(&mut self, x: ClientPacketCode) -> Result<usize>;
-    async fn write_hello_packet(&mut self, x: HelloPacket) -> Result<usize>;
-    async fn write_ping_packet(&mut self) -> Result<usize>;
+    fn write_packet_code(
+        &mut self,
+        x: ClientPacketCode,
+    ) -> impl std::future::Future<Output = Result<usize>> + Send;
+    fn write_hello_packet(
+        &mut self,
+        x: HelloPacket,
+    ) -> impl std::future::Future<Output = Result<usize>> + Send;
+    fn write_ping_packet(
+        &mut self,
+    ) -> impl std::future::Future<Output = Result<usize>> + Send;
 }
 
 impl<R> ClickHouseWrite for R
 where
     R: AsyncWrite + Unpin + Send + Sync,
 {
-    async fn write_packet_code(&mut self, x: ClientPacketCode) -> Result<usize> {
+    async fn write_packet_code(
+        &mut self,
+        x: ClientPacketCode,
+    ) -> Result<usize> {
         self.encode_u8(x as u8).await
     }
 
@@ -183,20 +197,33 @@ where
 mod test {
     use crate::protocol::client::{self, ClickHouseWrite};
     use anyhow::Result;
-    use tracing::info;
     use tracing_test::traced_test;
 
     #[traced_test]
     #[tokio::test]
-    async fn test_client_hello() -> Result<()> {
+    async fn test_default_client_hello() -> Result<()> {
         let mut buf: Vec<u8> = Vec::new();
 
         let len = buf
             .write_hello_packet(client::HelloPacket::default())
             .await?;
 
-        info!("written hello packet size is: {}", len);
-        info!("written hello packet is: {:?}", buf);
+        let hello_packet: [u8; 48] = [
+            0, 24, 99, 108, 105, 99, 107, 104, 111, 117, 115, 101, 45, 110, 97,
+            116, 105, 118, 101, 45, 99, 108, 105, 101, 110, 116, 0, 1, 179,
+            169, 3, 7, 100, 101, 102, 97, 117, 108, 116, 7, 100, 101, 102, 97,
+            117, 108, 116, 0,
+        ];
+
+        assert!(len == 48, "written hello packet size is: {}", len);
+        assert!(vec_compare(&buf, &hello_packet));
         Ok(())
+    }
+
+    fn vec_compare(va: &[u8], vb: &[u8]) -> bool {
+        (va.len() == vb.len()) &&  // zip stops at the shortest
+         va.iter()
+           .zip(vb)
+           .all(|(a,b)| *a == *b)
     }
 }

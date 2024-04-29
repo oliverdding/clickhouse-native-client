@@ -26,4 +26,4 @@ pub enum ClickHouseClientError {
     IoError(#[from] std::io::Error),
 }
 
-pub type Result<T, E=ClickHouseClientError> = std::result::Result<T,E>;
+pub type Result<T, E = ClickHouseClientError> = std::result::Result<T, E>;

@@ -3,12 +3,14 @@ use tokio::io::{AsyncRead, AsyncReadExt};
 use crate::error::{ClickHouseClientError, Result};
 use crate::protocol::{MAX_STRING_SIZE, MAX_VARINT_LEN64};
 
-use futures::future::FutureExt;
-
 pub trait ClickHouseDecoder {
     fn decode_u8(
         &mut self,
     ) -> impl std::future::Future<Output = Result<u8>> + Send;
+
+    fn decode_bool(
+        &mut self,
+    ) -> impl std::future::Future<Output = Result<bool>> + Send;
 
     fn decode_i32(
         &mut self,
@@ -21,33 +23,11 @@ pub trait ClickHouseDecoder {
     fn decode_string(
         &mut self,
     ) -> impl std::future::Future<Output = Result<Vec<u8>>> + Send;
-}
-
-pub trait ClickHouseDecoderExt: ClickHouseDecoder {
-    fn decode_bool(
-        &mut self,
-    ) -> impl std::future::Future<Output = Result<bool>> + Send {
-        self.decode_u8().map(|x| match x {
-            Ok(0) => Ok(false),
-            Ok(1) => Ok(true),
-            Ok(_) => Err(ClickHouseClientError::DecodeError(
-                "invalid byte when decoding bool".into(),
-            )),
-            Err(e) => Err(e),
-        })
-    }
 
     fn decode_utf8_string(
         &mut self,
-    ) -> impl std::future::Future<Output = Result<String>> + Send {
-        self.decode_string().map(|x| match x {
-            Ok(x) => String::from_utf8(x).map_err(|e| e.into()),
-            Err(e) => Err(e),
-        })
-    }
+    ) -> impl std::future::Future<Output = Result<String>> + Send;
 }
-
-impl<T: ?Sized> ClickHouseDecoderExt for T where T: ClickHouseDecoder {}
 
 impl<R> ClickHouseDecoder for R
 where
@@ -55,6 +35,16 @@ where
 {
     async fn decode_u8(&mut self) -> Result<u8> {
         Ok(self.read_u8().await?)
+    }
+
+    async fn decode_bool(&mut self) -> Result<bool> {
+        match self.read_u8().await? {
+            0 => Ok(false),
+            1 => Ok(true),
+            _ => Err(ClickHouseClientError::DecodeError(
+                "invalid byte when decoding bool".into(),
+            )),
+        }
     }
 
     async fn decode_i32(&mut self) -> Result<i32> {
@@ -97,11 +87,14 @@ where
 
         Ok(buf)
     }
+
+    async fn decode_utf8_string(&mut self) -> Result<String> {
+        String::from_utf8(self.decode_string().await?).map_err(|e| e.into())
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::binary::decode::ClickHouseDecoderExt;
     use crate::binary::ClickHouseDecoder;
     use crate::binary::ClickHouseEncoder;
     use crate::protocol::MAX_STRING_SIZE;

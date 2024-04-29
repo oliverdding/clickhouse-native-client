@@ -8,6 +8,11 @@ pub trait ClickHouseEncoder {
         x: u8,
     ) -> impl std::future::Future<Output = Result<usize>> + Send;
 
+    fn encode_bool(
+        &mut self,
+        x: bool,
+    ) -> impl std::future::Future<Output = Result<usize>> + Send;
+
     fn encode_i32(
         &mut self,
         x: i32,
@@ -23,11 +28,6 @@ pub trait ClickHouseEncoder {
         x: impl AsRef<[u8]> + Send,
     ) -> impl std::future::Future<Output = Result<usize>> + Send;
 
-    fn encode_bool(
-        &mut self,
-        x: bool,
-    ) -> impl std::future::Future<Output = Result<usize>> + Send;
-
     fn encode_utf8_string(
         &mut self,
         x: impl AsRef<str> + Send,
@@ -41,6 +41,10 @@ where
     async fn encode_u8(&mut self, x: u8) -> Result<usize> {
         self.write_u8(x).await?;
         Ok(1)
+    }
+
+    async fn encode_bool(&mut self, x: bool) -> Result<usize> {
+        self.encode_u8(x as u8).await
     }
 
     async fn encode_i32(&mut self, x: i32) -> Result<usize> {
@@ -69,10 +73,6 @@ where
         let header_len = self.encode_var_uint(str_len as u64).await?;
         self.write_all(x).await?;
         Ok(header_len + str_len)
-    }
-
-    async fn encode_bool(&mut self, x: bool) -> Result<usize> {
-        self.encode_u8(x as u8).await
     }
 
     async fn encode_utf8_string(
