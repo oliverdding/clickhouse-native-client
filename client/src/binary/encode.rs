@@ -2,38 +2,28 @@ use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::error::Result;
 
+#[async_trait::async_trait]
 pub trait ClickHouseEncoder {
-    fn encode_u8(
-        &mut self,
-        x: u8,
-    ) -> impl std::future::Future<Output = Result<usize>> + Send;
+    async fn encode_u8(&mut self, x: u8) -> Result<usize>;
 
-    fn encode_bool(
-        &mut self,
-        x: bool,
-    ) -> impl std::future::Future<Output = Result<usize>> + Send;
+    async fn encode_bool(&mut self, x: bool) -> Result<usize>;
 
-    fn encode_i32(
-        &mut self,
-        x: i32,
-    ) -> impl std::future::Future<Output = Result<usize>> + Send;
+    async fn encode_i32(&mut self, x: i32) -> Result<usize>;
 
-    fn encode_var_uint(
-        &mut self,
-        x: u64,
-    ) -> impl std::future::Future<Output = Result<usize>> + Send;
+    async fn encode_var_uint(&mut self, x: u64) -> Result<usize>;
 
-    fn encode_string(
+    async fn encode_string(
         &mut self,
         x: impl AsRef<[u8]> + Send,
-    ) -> impl std::future::Future<Output = Result<usize>> + Send;
+    ) -> Result<usize>;
 
-    fn encode_utf8_string(
+    async fn encode_utf8_string(
         &mut self,
         x: impl AsRef<str> + Send,
-    ) -> impl std::future::Future<Output = Result<usize>> + Send;
+    ) -> Result<usize>;
 }
 
+#[async_trait::async_trait]
 impl<R> ClickHouseEncoder for R
 where
     R: AsyncWrite + Unpin + Send + Sync,
@@ -85,8 +75,10 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::{binary::ClickHouseEncoder, protocol::MAX_VARINT_LEN64};
     use anyhow::Result;
+
+    use crate::binary::ClickHouseEncoder;
+    use crate::protocol::MAX_VARINT_LEN64;
 
     #[tokio::test]
     async fn test_write_var_uint_1() -> Result<()> {

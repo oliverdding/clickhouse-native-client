@@ -119,7 +119,7 @@ where
                 name: name.to_owned(),
                 message: message.to_owned(),
                 stack_trace: stack_trace.to_owned(),
-                nested: nested,
+                nested,
             });
             if !nested {
                 break;

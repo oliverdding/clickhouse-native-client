@@ -3,32 +3,22 @@ use tokio::io::{AsyncRead, AsyncReadExt};
 use crate::error::{ClickHouseClientError, Result};
 use crate::protocol::{MAX_STRING_SIZE, MAX_VARINT_LEN64};
 
+#[async_trait::async_trait]
 pub trait ClickHouseDecoder {
-    fn decode_u8(
-        &mut self,
-    ) -> impl std::future::Future<Output = Result<u8>> + Send;
+    async fn decode_u8(&mut self) -> Result<u8>;
 
-    fn decode_bool(
-        &mut self,
-    ) -> impl std::future::Future<Output = Result<bool>> + Send;
+    async fn decode_bool(&mut self) -> Result<bool>;
 
-    fn decode_i32(
-        &mut self,
-    ) -> impl std::future::Future<Output = Result<i32>> + Send;
+    async fn decode_i32(&mut self) -> Result<i32>;
 
-    fn decode_var_uint(
-        &mut self,
-    ) -> impl std::future::Future<Output = Result<u64>> + Send;
+    async fn decode_var_uint(&mut self) -> Result<u64>;
 
-    fn decode_string(
-        &mut self,
-    ) -> impl std::future::Future<Output = Result<Vec<u8>>> + Send;
+    async fn decode_string(&mut self) -> Result<Vec<u8>>;
 
-    fn decode_utf8_string(
-        &mut self,
-    ) -> impl std::future::Future<Output = Result<String>> + Send;
+    async fn decode_utf8_string(&mut self) -> Result<String>;
 }
 
+#[async_trait::async_trait]
 impl<R> ClickHouseDecoder for R
 where
     R: AsyncRead + Unpin + Send + Sync,
@@ -95,12 +85,10 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::binary::ClickHouseDecoder;
-    use crate::binary::ClickHouseEncoder;
-    use crate::protocol::MAX_STRING_SIZE;
-    use crate::protocol::MAX_VARINT_LEN64;
-
     use anyhow::Result;
+
+    use crate::binary::{ClickHouseDecoder, ClickHouseEncoder};
+    use crate::protocol::{MAX_STRING_SIZE, MAX_VARINT_LEN64};
 
     #[tokio::test]
     async fn test_decode_uvarint() -> Result<()> {
@@ -136,9 +124,12 @@ mod test {
     #[tokio::test]
     async fn test_decode_string() -> Result<()> {
         let mut buf: Vec<u8> = Vec::with_capacity(MAX_STRING_SIZE);
-        for expected in
-            vec!["❤️‍🔥", "Hello", "你好", "こんにちは", "안녕하세요", "Привет"]
-        {
+        for expected in ["❤️‍🔥",
+            "Hello",
+            "你好",
+            "こんにちは",
+            "안녕하세요",
+            "Привет"] {
             let _ = buf.encode_utf8_string(expected).await?;
 
             let mut buffer = buf.as_slice();
@@ -159,9 +150,9 @@ mod test {
         let mut buffer = buf.as_slice();
 
         let actual = buffer.decode_bool().await?;
-        assert_eq!(actual, true);
+        assert!(actual);
         let actual = buffer.decode_bool().await?;
-        assert_eq!(actual, false);
+        assert!(!actual);
         Ok(())
     }
 }
